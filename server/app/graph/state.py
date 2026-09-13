@@ -6,3 +6,12 @@ class ReportState(TypedDict):
     
     category: str
     category_confidence: str
+    
+    image_base64: str | None
+    image_mime_type: str | None
+    
+    visual_evidence: str | None
+    image_relevant: bool
+    
+    needs_clarification: bool
+    clarification_question: str | None
