@@ -1,11 +1,10 @@
 import base64
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
-
 
 from app.graph.workflow import graph
 
 app = FastAPI()
+
 
 # health check
 @app.get("/health")
@@ -61,6 +60,10 @@ async def analyze_report(
     return {
         "description": result["description"],
         "location": result["location"],
+        "location_valid": result["location_valid"],
+        "jurisdiction": result["jurisdiction"],
+        "jurisdiction_area": result["jurisdiction_area"],
+        "jurisdiction_source": result["jurisdiction_source"],
         "detected_category": result["category"],
         "confidence": result["category_confidence"],
         "image_relevant": result["image_relevant"],

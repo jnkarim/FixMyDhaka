@@ -1,0 +1,65 @@
+{
+  "DNCC": {
+    "areas": [
+      "mirpur",
+      "mohammadpur",
+      "adabor",
+      "sher-e-bangla nagar",
+      "pallabi",
+      "kafrul",
+      "dhaka cantonment",
+      "tejgaon",
+      "tejgaon industrial area",
+      "gulshan",
+      "banani",
+      "rampura",
+      "airport",
+      "bhasantek",
+      "darus salam",
+      "rupnagar",
+      "shah ali",
+      "vatara",
+      "badda",
+      "khilkhet",
+      "uttara east",
+      "uttara west",
+      "uttara",
+      "uttarkhan",
+      "dakshinkhan",
+      "hatirjheel",
+      "turag"
+    ],
+    "source": "https://dncc.gov.bd/pages/static-pages/6922df2b933eb65569e20537"
+  },
+
+  "DSCC": {
+    "areas": [
+      "maghbazar",
+      "basabo",
+      "azimpur",
+      "motijheel",
+      "malibagh",
+      "jatrabari",
+      "dhaka kotwali",
+      "kotwali",
+      "sutrapur",
+      "bangsal",
+      "wari",
+      "gendaria",
+      "lalbagh",
+      "hazaribagh",
+      "dhanmondi",
+      "shahbagh",
+      "new market",
+      "khilgaon",
+      "kamrangirchar",
+      "matuail",
+      "manda",
+      "daniya",
+      "shyampur",
+      "nasirabad",
+      "demra"
+    ],
+    "source": "https://dscc.gov.bd/sites/default/files/files/dscc.portal.gov.bd/notices/ab08816b_3668_46f9_8d1f_5fa452f13889/ToR_DSCC%2020-3-2019.pdf"
+  }
+}
