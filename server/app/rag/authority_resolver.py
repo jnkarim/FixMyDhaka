@@ -3,21 +3,36 @@ from app.rag.retriever import (
 )
 
 
-MAX_DISTANCE = 0.70
-
-
 def resolve_authority(
     category: str,
     jurisdiction: str,
 ):
+    if category in (
+        "Unclear",
+        "Public Safety",
+    ):
+        return {
+            "authority": None,
+            "evidence_sufficient": False,
+            "evidence": None,
+            "source_name": None,
+            "distance": None,
+        }
+
+    if category == "Water / Sewerage":
+        target_authority = "DWASA"
+    else:
+        target_authority = jurisdiction
+
     query = (
-        f"{jurisdiction} official responsibility "
+        f"{target_authority} official responsibility "
         f"for {category} service and citizen complaints"
     )
 
     results = search_authority_documents(
         query=query,
         category=category,
+        authority=target_authority,
         k=3,
     )
 
@@ -30,42 +45,19 @@ def resolve_authority(
             "distance": None,
         }
 
-    best_document, best_distance = (
-        results[0]
-    )
+    best_document, best_distance = results[0]
 
-    authority = (
-        best_document.metadata.get(
-            "authority"
-        )
-    )
+    authority = best_document.metadata.get("authority")
 
-    source_name = (
-        best_document.metadata.get(
-            "source_name"
-        )
-    )
+    source_name = best_document.metadata.get("source_name")
 
-    evidence = (
-        best_document.page_content
-    )
+    evidence = best_document.page_content
 
-    scope_valid = (
-        authority == jurisdiction
-        or (
-            category == "Water / Sewerage"
-            and authority == "DWASA"
-        )
-    )
+    scope_valid = authority == target_authority
 
-    distance_valid = (
-        best_distance <= MAX_DISTANCE
-    )
+    evidence_valid = bool(evidence and evidence.strip())
 
-    evidence_sufficient = (
-        scope_valid
-        and distance_valid
-    )
+    evidence_sufficient = scope_valid and evidence_valid
 
     if not evidence_sufficient:
         return {
@@ -83,7 +75,8 @@ def resolve_authority(
         "source_name": source_name,
         "distance": best_distance,
     }
-    
+
+
 def main():
     result = resolve_authority(
         category="Garbage",

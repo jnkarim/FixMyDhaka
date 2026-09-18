@@ -7,123 +7,88 @@ from app.rag.config import (
     EMBEDDING_MODEL,
 )
 
+embeddings = HuggingFaceEmbeddings(
+    model_name=EMBEDDING_MODEL,
+    encode_kwargs={
+        "normalize_embeddings": True,
+    },
+)
 
-def get_vectorstore():
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL,
-
-        encode_kwargs={
-            "normalize_embeddings": True
-        },
-    )
-
-    vector_store = Chroma(
-        collection_name=COLLECTION_NAME,
-
-        persist_directory=str(
-            VECTORSTORE_DIR
-        ),
-
-        embedding_function=embeddings,
-    )
-
-    return vector_store
+vector_store = Chroma(
+    collection_name=COLLECTION_NAME,
+    persist_directory=str(VECTORSTORE_DIR),
+    embedding_function=embeddings,
+)
 
 
 def search_authority_documents(
     query: str,
     category: str,
+    authority: str,
     k: int = 3,
 ):
-
-    vector_store = get_vectorstore()
-
-    results = (
-        vector_store
-        .similarity_search_with_score(
-            query=query,
-            k=k,
-
-            filter={
-                "category": category
-            },
-        )
+    results = vector_store.similarity_search_with_score(
+        query=query,
+        k=k,
+        filter={
+            "$and": [
+                {
+                    "category": category,
+                },
+                {
+                    "authority": authority,
+                },
+            ]
+        },
     )
 
     return results
 
 
 def main():
-
     jurisdiction = "DNCC"
-
     category = "Garbage"
 
     query = (
         f"{jurisdiction} official responsibility "
-        f"for {category} collection "
-        f"and citizen complaints"
+        f"for {category} service and citizen complaints"
     )
 
     results = search_authority_documents(
         query=query,
         category=category,
+        authority=jurisdiction,
         k=3,
-    )
-
-    print(
-        f"\nQuery: {query}"
-    )
-
-    print(
-        f"Category filter: {category}\n"
     )
 
     for index, result in enumerate(
         results,
         start=1,
     ):
-
-        document, score = result
+        document, distance = result
 
         print("=" * 70)
-
-        print(
-            f"Result {index}"
-        )
-
-        print(
-            f"Distance: {score}"
-        )
+        print(f"Result {index}")
+        print(f"Distance: {distance}")
 
         print(
             "Authority:",
-            document.metadata.get(
-                "authority"
-            ),
+            document.metadata.get("authority"),
         )
 
         print(
             "Category:",
-            document.metadata.get(
-                "category"
-            ),
+            document.metadata.get("category"),
         )
 
         print(
             "Source:",
-            document.metadata.get(
-                "source_name"
-            ),
+            document.metadata.get("source_name"),
         )
 
         print("\nEvidence:\n")
-
-        print(
-            document.page_content
-        )
-
+        print(document.page_content)
         print()
 
 

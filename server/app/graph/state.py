@@ -12,7 +12,7 @@ class ReportState(TypedDict):
     jurisdiction_source: str | None
 
     category: str
-    category_confidence: str
+    category_confidence: float
 
     image_base64: str | None
     image_mime_type: str | None
@@ -29,4 +29,13 @@ class ReportState(TypedDict):
     authority_evidence: str | None
     authority_source: str | None
     authority_distance: float | None
+
     retrieval_attempts: int
+
+    reporting_method: str | None
+    reporting_url: str | None
+    reporting_phone: str | None
+    reporting_email: str | None
+
+    next_step: str | None
+    complaint_text: str | None
