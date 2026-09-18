@@ -1,6 +1,6 @@
 import shutil
 
-from dotenv import load_dotenv
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
@@ -12,79 +12,158 @@ from app.rag.config import (
     EMBEDDING_MODEL,
 )
 
-from app.rag.ocr_loader import load_scanned_pdf
-
-
-load_dotenv()
+from app.rag.sources import AUTHORITY_SOURCES
 
 
 def load_documents():
     documents = []
 
-    pdf_files = list(
-        AUTHORITY_DOCS_DIR.glob("*.pdf")
-    )
+    for source in AUTHORITY_SOURCES:
 
-    if not pdf_files:
-        raise FileNotFoundError(
-            f"No PDF files found in {AUTHORITY_DOCS_DIR}"
+        file_path = (
+            AUTHORITY_DOCS_DIR
+            / source["filename"]
         )
 
-    for pdf_path in pdf_files:
-        print(f"Loading: {pdf_path.name}")
+        text = file_path.read_text(
+            encoding="utf-8"
+        ).strip()
 
-        pages = load_scanned_pdf(pdf_path)
+        sections = text.split(
+            "CATEGORY:"
+        )
 
-        documents.extend(pages)
+        authority_header = (
+            sections[0].strip()
+        )
+
+        for section in sections[1:]:
+
+            section = section.strip()
+
+            if not section:
+                continue
+
+            lines = section.splitlines()
+
+            category = lines[0].strip()
+
+            content = (
+                f"{authority_header}\n\n"
+                f"CATEGORY: {section}"
+            )
+
+            document = Document(
+                page_content=content,
+                metadata={
+                    "authority":
+                        source["authority"],
+
+                    "category":
+                        category,
+
+                    "source_name":
+                        source["source_name"],
+
+                    "filename":
+                        source["filename"],
+                },
+            )
+
+            documents.append(
+                document
+            )
+
+            print(
+                f"Loaded: "
+                f"{source['authority']} "
+                f"-> {category}"
+            )
 
     return documents
 
 
 def split_documents(documents):
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1200,
-        chunk_overlap=200,
+        chunk_size=700,
+        chunk_overlap=100,
     )
 
-    chunks = splitter.split_documents(documents)
+    chunks = splitter.split_documents(
+        documents
+    )
 
     return chunks
 
 
-def build_vectorstore(chunks):
-    if VECTORSTORE_DIR.exists():
-        shutil.rmtree(VECTORSTORE_DIR)
-
+def get_embeddings():
     embeddings = HuggingFaceEmbeddings(
         model_name=EMBEDDING_MODEL,
+
+        encode_kwargs={
+            "normalize_embeddings": True
+        },
     )
+
+    return embeddings
+
+
+def build_vectorstore(chunks):
+
+    if VECTORSTORE_DIR.exists():
+        shutil.rmtree(
+            VECTORSTORE_DIR
+        )
+
+    embeddings = get_embeddings()
 
     Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
         collection_name=COLLECTION_NAME,
-        persist_directory=str(VECTORSTORE_DIR),
+        persist_directory=str(
+            VECTORSTORE_DIR
+        ),
     )
 
 
 def main():
-    print("Loading documents...")
+    print(
+        "Loading authority documents..."
+    )
 
     documents = load_documents()
 
-    print(f"Loaded {len(documents)} pages.")
+    print(
+        f"Loaded {len(documents)} "
+        f"category documents."
+    )
 
-    print("Splitting documents...")
+    print(
+        "Splitting documents..."
+    )
 
-    chunks = split_documents(documents)
+    chunks = split_documents(
+        documents
+    )
 
-    print(f"Created {len(chunks)} chunks.")
+    print(
+        f"Created {len(chunks)} chunks."
+    )
 
-    print("Creating local embeddings and vector store...")
+    print(
+        "Creating embeddings "
+        "and vector store..."
+    )
 
-    build_vectorstore(chunks)
+    build_vectorstore(
+        chunks
+    )
 
-    print("Authority vector store created successfully.")
+    print(
+        "Authority vector store "
+        "created successfully."
+    )
 
 
 if __name__ == "__main__":

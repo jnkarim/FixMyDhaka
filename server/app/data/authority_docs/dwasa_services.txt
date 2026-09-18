@@ -1,0 +1,27 @@
+AUTHORITY: Dhaka Water Supply and Sewerage Authority (DWASA)
+
+CATEGORY: Water / Sewerage
+
+EVIDENCE:
+Dhaka WASA has the mandate to provide water supply and sewage disposal services in Dhaka. Its responsibilities include providing safe and adequate drinking water and the collection, treatment and disposal of sewage.
+
+SOURCE:
+Dhaka WASA official overview and service information.
+
+
+CATEGORY: Water Supply Complaint
+
+EVIDENCE:
+Problems involving Dhaka WASA water supply, water service and related complaints fall within Dhaka WASA's water supply mandate.
+
+SOURCE:
+Dhaka WASA official service information.
+
+
+CATEGORY: Sewerage Complaint
+
+EVIDENCE:
+Problems involving sewage collection, sewerage services and sewage disposal fall within Dhaka WASA's sewerage mandate.
+
+SOURCE:
+Dhaka WASA official service information.

@@ -4,15 +4,32 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.graph import START, END, StateGraph
+from langchain_google_genai import (
+    ChatGoogleGenerativeAI,
+)
+from langgraph.graph import (
+    START,
+    END,
+    StateGraph,
+)
 
 from app.graph.state import ReportState
-from app.services.jurisdiction import resolve_jurisdiction
+
+from app.services.jurisdiction import (
+    resolve_jurisdiction,
+)
+
+from app.services.reporting import (
+    build_action_plan,
+)
+
+from app.rag.authority_resolver import (
+    resolve_authority,
+)
 
 load_dotenv()
 
-# Structured Output Schema of Gemini
+
 class IssueClassification(BaseModel):
     category: Literal[
         "Road / Pothole",
@@ -26,7 +43,11 @@ class IssueClassification(BaseModel):
 
     image_relevant: bool
     visual_evidence: str | None
-    confidence: float = Field(ge=0, le=1)
+
+    confidence: float = Field(
+        ge=0,
+        le=1,
+    )
 
 
 model = ChatGoogleGenerativeAI(
@@ -34,13 +55,58 @@ model = ChatGoogleGenerativeAI(
     thinking_level="low",
 )
 
+
 classifier = model.with_structured_output(
     schema=IssueClassification.model_json_schema(),
     method="json_schema",
 )
 
 
-def classify_issue(state: ReportState):
+def validate_location(
+    state: ReportState,
+):
+    result = resolve_jurisdiction(state["location"])
+
+    if result is None:
+        return {
+            "location_valid": False,
+            "jurisdiction": None,
+            "jurisdiction_area": None,
+            "jurisdiction_source": None,
+            "needs_clarification": True,
+            "clarification_question": (
+                "I could not verify this location "
+                "as being within DNCC or DSCC. "
+                "Please provide a more specific "
+                "Dhaka area."
+            ),
+        }
+
+    return {
+        "location_valid": True,
+        "jurisdiction": result["jurisdiction"],
+        "jurisdiction_area": result["matched_area"],
+        "jurisdiction_source": result["source"],
+        "needs_clarification": False,
+        "clarification_question": None,
+    }
+
+
+def route_after_location(
+    state: ReportState,
+) -> Literal[
+    "classify_issue",
+    "build_action",
+]:
+    if state["location_valid"]:
+        return "classify_issue"
+
+    return "build_action"
+
+
+def classify_issue(
+    state: ReportState,
+):
     prompt = f"""
 You classify civic issues reported in Dhaka.
 
@@ -67,7 +133,6 @@ Rules:
 - Classify only the type of civic issue.
 - Do not judge whether the location is specific enough.
 - If the issue itself cannot be identified, use "Unclear".
-- Do not invent details that are not visible or stated.
 """
 
     content = [
@@ -88,7 +153,6 @@ Rules:
 
     message = HumanMessage(content=content)
 
-    # actual AI call
     result = classifier.invoke([message])
 
     return {
@@ -98,43 +162,52 @@ Rules:
         "image_relevant": result["image_relevant"],
     }
 
-# Job is to verify location
-def validate_location(state: ReportState):
-    result = resolve_jurisdiction(state["location"])
 
-    if result is None:
+def resolve_authority_node(
+    state: ReportState,
+):
+    category = state.get("category")
+
+    jurisdiction = state.get("jurisdiction")
+
+    current_attempts = state.get(
+        "retrieval_attempts",
+        0,
+    )
+
+    if not category or category == "Unclear" or not jurisdiction:
         return {
-            "location_valid": False,
-            "jurisdiction": None,
-            "jurisdiction_area": None,
-            "jurisdiction_source": None,
-            "needs_clarification": True,
-            "clarification_question": (
-                "I could not verify this location as being within DNCC or DSCC. "
-                "Please provide a more specific Dhaka area."
-            ),
+            "authority": None,
+            "evidence_sufficient": False,
+            "authority_evidence": None,
+            "authority_source": None,
+            "authority_distance": None,
+            "retrieval_attempts": current_attempts + 1,
         }
 
+    result = resolve_authority(
+        category=category,
+        jurisdiction=jurisdiction,
+    )
+
     return {
-        "location_valid": True,
-        "jurisdiction": result["jurisdiction"],
-        "jurisdiction_area": result["matched_area"],
-        "jurisdiction_source": result["source"],
-        "needs_clarification": False,
-        "clarification_question": None,
+        "authority": result["authority"],
+        "evidence_sufficient": result["evidence_sufficient"],
+        "authority_evidence": result["evidence"],
+        "authority_source": result["source_name"],
+        "authority_distance": result["distance"],
+        "retrieval_attempts": current_attempts + 1,
     }
 
-# routing function 
-def route_after_location(
-    state: ReportState,
-) -> Literal["classify_issue", END]:
-    if state["location_valid"]:
-        return "classify_issue"
 
-    return END
+def build_action_node(
+    state: ReportState,
+):
+    return build_action_plan(state)
 
 
 builder = StateGraph(ReportState)
+
 
 builder.add_node(
     "validate_location",
@@ -146,19 +219,45 @@ builder.add_node(
     classify_issue,
 )
 
+builder.add_node(
+    "resolve_authority",
+    resolve_authority_node,
+)
+
+builder.add_node(
+    "build_action",
+    build_action_node,
+)
+
+
 builder.add_edge(
     START,
     "validate_location",
 )
+
 
 builder.add_conditional_edges(
     "validate_location",
     route_after_location,
 )
 
+
 builder.add_edge(
     "classify_issue",
+    "resolve_authority",
+)
+
+
+builder.add_edge(
+    "resolve_authority",
+    "build_action",
+)
+
+
+builder.add_edge(
+    "build_action",
     END,
 )
+
 
 graph = builder.compile()
