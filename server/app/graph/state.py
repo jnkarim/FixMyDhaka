@@ -22,3 +22,11 @@ class ReportState(TypedDict):
 
     needs_clarification: bool
     clarification_question: str | None
+
+    authority: str | None
+
+    evidence_sufficient: bool
+    authority_evidence: str | None
+    authority_source: str | None
+    authority_distance: float | None
+    retrieval_attempts: int

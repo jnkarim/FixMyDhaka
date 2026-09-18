@@ -10,6 +10,10 @@ from langgraph.graph import START, END, StateGraph
 from app.graph.state import ReportState
 from app.services.jurisdiction import resolve_jurisdiction
 
+from app.rag.authority_resolver import (
+    resolve_authority,
+)
+
 load_dotenv()
 
 # Structured Output Schema of Gemini
@@ -133,6 +137,58 @@ def route_after_location(
 
     return END
 
+def resolve_authority_node(
+    state: ReportState,
+):
+    category = state.get("category")
+    jurisdiction = state.get(
+        "jurisdiction"
+    )
+
+    current_attempts = state.get(
+        "retrieval_attempts",
+        0,
+    )
+
+    if (
+        not category
+        or category == "Unclear"
+        or not jurisdiction
+    ):
+        return {
+            "authority": None,
+            "evidence_sufficient": False,
+            "authority_evidence": None,
+            "authority_source": None,
+            "authority_distance": None,
+            "retrieval_attempts":
+                current_attempts + 1,
+        }
+
+    result = resolve_authority(
+        category=category,
+        jurisdiction=jurisdiction,
+    )
+
+    return {
+        "authority":
+            result["authority"],
+
+        "evidence_sufficient":
+            result["evidence_sufficient"],
+
+        "authority_evidence":
+            result["evidence"],
+
+        "authority_source":
+            result["source_name"],
+
+        "authority_distance":
+            result["distance"],
+
+        "retrieval_attempts":
+            current_attempts + 1,
+    }
 
 builder = StateGraph(ReportState)
 
@@ -144,6 +200,11 @@ builder.add_node(
 builder.add_node(
     "classify_issue",
     classify_issue,
+)
+
+builder.add_node(
+    "resolve_authority",
+    resolve_authority_node,
 )
 
 builder.add_edge(
@@ -158,6 +219,11 @@ builder.add_conditional_edges(
 
 builder.add_edge(
     "classify_issue",
+    "resolve_authority",
+)
+
+builder.add_edge(
+    "resolve_authority",
     END,
 )
 
