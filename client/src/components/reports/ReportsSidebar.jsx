@@ -1,269 +1,649 @@
 import {
   ChevronLeft,
+  Clock3,
+  LoaderCircle,
+  MapPin,
   Search,
   SlidersHorizontal,
+  X,
 } from "lucide-react";
 
-import demoReports from "../../data/demoReports";
-import ReportListItem from "./ReportListItem";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  getReports,
+} from "../../services/api";
+
 
 function ReportsSidebar({
-  isOpen,
-  onToggle,
-  onSelectReport,
+  onClose,
 }) {
-  return (
-    <aside
-      className={`
-        hidden
-        min-h-0
-        shrink-0
-        overflow-hidden
-        bg-white
-        transition-[width,opacity,border]
-        duration-300
-        ease-in-out
-        lg:flex
-        lg:flex-col
+  const [
+    reports,
+    setReports,
+  ] = useState([]);
 
-        ${
-          isOpen
-            ? "w-[320px] border-r border-zinc-200 opacity-100"
-            : "w-0 border-r-0 opacity-0"
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    searchQuery,
+    setSearchQuery,
+  ] = useState("");
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState("Open");
+
+  const [
+    categoryFilter,
+    setCategoryFilter,
+  ] = useState("All");
+
+
+  useEffect(() => {
+    const loadReports =
+      async () => {
+        try {
+          setLoading(true);
+
+          const data =
+            await getReports();
+
+          setReports(data);
+        } catch {
+          setReports([]);
+        } finally {
+          setLoading(false);
         }
-      `}
+      };
+
+    loadReports();
+  }, []);
+
+
+  const categories =
+    useMemo(() => {
+      return [
+        ...new Set(
+          reports
+            .map(
+              (report) =>
+                report.category
+            )
+            .filter(Boolean)
+        ),
+      ];
+    }, [reports]);
+
+
+  const filteredReports =
+    useMemo(() => {
+      const query =
+        searchQuery
+          .trim()
+          .toLowerCase();
+
+      return reports.filter(
+        (report) => {
+          const matchesSearch =
+            !query ||
+            report.title
+              ?.toLowerCase()
+              .includes(query) ||
+            report.location
+              ?.toLowerCase()
+              .includes(query) ||
+            report.category
+              ?.toLowerCase()
+              .includes(query);
+
+          const matchesStatus =
+            statusFilter ===
+            "All" ||
+            report.status ===
+            statusFilter;
+
+          const matchesCategory =
+            categoryFilter ===
+            "All" ||
+            report.category ===
+            categoryFilter;
+
+          return (
+            matchesSearch &&
+            matchesStatus &&
+            matchesCategory
+          );
+        }
+      );
+    }, [
+      reports,
+      searchQuery,
+      statusFilter,
+      categoryFilter,
+    ]);
+
+
+  return (
+    <div
+      className="
+        flex
+        h-full
+        min-h-0
+        w-full
+        flex-col
+        bg-white
+      "
     >
       <div
         className="
           flex
-          h-full
-          w-[320px]
-          min-w-[320px]
-          flex-col
+          shrink-0
+          items-center
+          justify-between
+          bg-[#E8FF00]
+          px-4
+          py-4
+          sm:px-5
         "
       >
-        <div
-          className="
-            flex
-            h-[74px]
-            shrink-0
-            items-center
-            justify-between
-            bg-[#E8FF00]
-            px-5
-            text-sm
-            font-black
-            text-black
-          "
-        >
-          <span>
-            Click map to report
-          </span>
-
-          <button
-            type="button"
-            onClick={onToggle}
-            title="Close reports sidebar"
+        <div>
+          <p
             className="
-              flex
-              h-10
-              w-10
-              items-center
-              justify-center
-              rounded-full
-              bg-black
-              text-[#E8FF00]
-              transition
-              hover:scale-105
-              hover:bg-zinc-900
-              active:scale-95
+              text-sm
+              font-black
+              text-black
+              sm:text-base
             "
           >
-            <ChevronLeft
-              size={20}
-            />
-          </button>
+            Click map to report
+          </p>
+
+          <p
+            className="
+              mt-1
+              text-[10px]
+              font-medium
+              text-black/50
+            "
+          >
+            Select a location on the map
+          </p>
         </div>
 
-        <div className="border-b border-zinc-200 bg-white p-5">
-          <div className="relative">
-            <Search
-              size={17}
-              className="
-                pointer-events-none
-                absolute
-                left-4
-                top-1/2
-                -translate-y-1/2
-                text-zinc-400
-              "
-            />
-
-            <input
-              type="search"
-              placeholder="Search reports"
-              className="
-                w-full
-                rounded-xl
-                border
-                border-zinc-200
-                bg-zinc-50
-                py-3
-                pl-11
-                pr-4
-                text-sm
-                text-zinc-900
-                outline-none
-                transition
-                placeholder:text-zinc-400
-                focus:border-black
-                focus:bg-white
-                focus:ring-4
-                focus:ring-[#E8FF00]/25
-              "
-            />
-          </div>
-
-          <div
+        <button
+          type="button"
+          onClick={
+            onClose
+          }
+          aria-label="Close reports sidebar"
+          className="
+            flex
+            h-11
+            w-11
+            items-center
+            justify-center
+            rounded-full
+            bg-black
+            text-[#E8FF00]
+          "
+        >
+          <ChevronLeft
+            size={21}
             className="
-              mt-5
-              flex
-              items-center
-              gap-2
+              hidden
+              xl:block
+            "
+          />
+
+          <X
+            size={19}
+            className="
+              xl:hidden
+            "
+          />
+        </button>
+      </div>
+
+
+      <div
+        className="
+          shrink-0
+          border-b
+          border-zinc-200
+          p-4
+          sm:p-5
+        "
+      >
+        <div className="relative">
+          <Search
+            size={16}
+            className="
+              pointer-events-none
+              absolute
+              left-4
+              top-1/2
+              -translate-y-1/2
+              text-zinc-400
+            "
+          />
+
+          <input
+            type="search"
+            value={
+              searchQuery
+            }
+            onChange={(
+              event
+            ) =>
+              setSearchQuery(
+                event.target.value
+              )
+            }
+            placeholder="Search reports"
+            className="
+              h-12
+              w-full
+              rounded-xl
+              border
+              border-zinc-200
+              bg-zinc-50
+              pl-11
+              pr-4
+              text-sm
+              outline-none
+              placeholder:text-zinc-400
+              focus:border-black
+              focus:bg-white
+              focus:ring-4
+              focus:ring-[#E8FF00]/20
+            "
+          />
+        </div>
+
+
+        <div
+          className="
+            mt-4
+            flex
+            items-center
+            gap-2
+          "
+        >
+          <SlidersHorizontal
+            size={14}
+            className="text-zinc-400"
+          />
+
+          <p
+            className="
               text-[10px]
-              font-extrabold
+              font-bold
               uppercase
-              tracking-[0.16em]
+              tracking-[0.14em]
               text-zinc-400
             "
           >
-            <SlidersHorizontal
-              size={14}
-            />
-
             Filters
-          </div>
+          </p>
+        </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <select
-              className="
-                rounded-xl
-                border
-                border-zinc-200
-                bg-white
-                px-3
-                py-3
-                text-xs
-                font-medium
-                text-zinc-700
-                outline-none
-                focus:border-black
-              "
-            >
-              <option>
-                Open reports
-              </option>
 
-              <option>
-                Fixed
-              </option>
+        <div
+          className="
+            mt-3
+            grid
+            grid-cols-2
+            gap-2
+          "
+        >
+          <select
+            value={
+              statusFilter
+            }
+            onChange={(
+              event
+            ) =>
+              setStatusFilter(
+                event.target.value
+              )
+            }
+            className="
+              h-11
+              min-w-0
+              rounded-xl
+              border
+              border-zinc-200
+              bg-white
+              px-3
+              text-xs
+              outline-none
+            "
+          >
+            <option value="All">
+              All reports
+            </option>
 
-              <option>
-                Everything
-              </option>
-            </select>
+            <option value="Open">
+              Open reports
+            </option>
 
-            <select
-              className="
-                rounded-xl
-                border
-                border-zinc-200
-                bg-white
-                px-3
-                py-3
-                text-xs
-                font-medium
-                text-zinc-700
-                outline-none
-                focus:border-black
-              "
-            >
-              <option>
-                All categories
-              </option>
+            <option value="Resolved">
+              Resolved
+            </option>
+          </select>
 
-              <option>
-                Road / Pothole
-              </option>
 
-              <option>
-                Garbage
-              </option>
+          <select
+            value={
+              categoryFilter
+            }
+            onChange={(
+              event
+            ) =>
+              setCategoryFilter(
+                event.target.value
+              )
+            }
+            className="
+              h-11
+              min-w-0
+              rounded-xl
+              border
+              border-zinc-200
+              bg-white
+              px-3
+              text-xs
+              outline-none
+            "
+          >
+            <option value="All">
+              All categories
+            </option>
 
-              <option>
-                Streetlight
-              </option>
+            {categories.map(
+              (category) => (
+                <option
+                  key={
+                    category
+                  }
+                  value={
+                    category
+                  }
+                >
+                  {category}
+                </option>
+              )
+            )}
+          </select>
+        </div>
+      </div>
 
-              <option>
-                Waterlogging
-              </option>
-            </select>
-          </div>
+
+      <div
+        className="
+          flex
+          shrink-0
+          items-center
+          justify-between
+          border-b
+          border-zinc-200
+          bg-zinc-50
+          px-4
+          py-4
+          sm:px-5
+        "
+      >
+        <div>
+          <p
+            className="
+              text-xs
+              font-black
+              text-zinc-900
+            "
+          >
+            Recent reports
+          </p>
+
+          <p
+            className="
+              mt-1
+              text-[10px]
+              text-zinc-400
+            "
+          >
+            Latest issues around Dhaka
+          </p>
         </div>
 
         <div
           className="
             flex
+            h-8
+            min-w-8
             items-center
-            justify-between
-            border-b
-            border-zinc-100
-            bg-zinc-50
-            px-5
-            py-4
+            justify-center
+            rounded-full
+            bg-black
+            px-2
+            text-[10px]
+            font-black
+            text-[#E8FF00]
           "
         >
-          <div>
-            <p className="text-xs font-bold text-zinc-800">
-              Recent reports
-            </p>
-
-            <p className="mt-1 text-[10px] text-zinc-400">
-              Latest issues around Dhaka
-            </p>
-          </div>
-
-          <span
-            className="
-              rounded-full
-              bg-black
-              px-3
-              py-1.5
-              text-[10px]
-              font-bold
-              text-[#E8FF00]
-            "
-          >
-            {demoReports.length}
-          </span>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {demoReports.map(
-            (report) => (
-              <ReportListItem
-                key={report.id}
-                report={report}
-                onSelect={
-                  onSelectReport
-                }
-              />
-            )
-          )}
+          {
+            filteredReports.length
+          }
         </div>
       </div>
-    </aside>
+
+
+      <div
+        className="
+          min-h-0
+          flex-1
+          overflow-y-auto
+        "
+      >
+        {loading ? (
+          <div
+            className="
+              flex
+              h-40
+              items-center
+              justify-center
+            "
+          >
+            <LoaderCircle
+              size={20}
+              className="
+                animate-spin
+                text-zinc-400
+              "
+            />
+          </div>
+        ) : filteredReports.length >
+          0 ? (
+          filteredReports.map(
+            (report) => (
+              <article
+                key={
+                  report.id
+                }
+                className="
+                  border-b
+                  border-zinc-100
+                  px-4
+                  py-4
+                  transition
+                  hover:bg-[#FBFFE6]
+                  sm:px-5
+                "
+              >
+                <div
+                  className="
+                    flex
+                    items-start
+                    gap-3
+                  "
+                >
+                  <span
+                    className="
+                      mt-1
+                      h-2.5
+                      w-2.5
+                      shrink-0
+                      rounded-full
+                      bg-[#E8FF00]
+                      ring-4
+                      ring-[#E8FF00]/20
+                    "
+                  />
+
+                  <div
+                    className="
+                      min-w-0
+                      flex-1
+                    "
+                  >
+                    <div
+                      className="
+                        flex
+                        items-start
+                        justify-between
+                        gap-3
+                      "
+                    >
+                      <p
+                        className="
+                          text-sm
+                          font-black
+                          leading-5
+                          text-zinc-900
+                        "
+                      >
+                        {report.title}
+                      </p>
+
+                      <span
+                        className="
+                          shrink-0
+                          rounded-full
+                          bg-black
+                          px-2.5
+                          py-1
+                          text-[8px]
+                          font-black
+                          uppercase
+                          text-[#E8FF00]
+                        "
+                      >
+                        {report.status}
+                      </span>
+                    </div>
+
+
+                    <div
+                      className="
+                        mt-3
+                        flex
+                        items-center
+                        gap-2
+                        text-xs
+                        text-zinc-500
+                      "
+                    >
+                      <MapPin
+                        size={13}
+                      />
+
+                      <span
+                        className="
+                          truncate
+                        "
+                      >
+                        {report.location}
+                      </span>
+                    </div>
+
+
+                    <div
+                      className="
+                        mt-4
+                        flex
+                        items-center
+                        justify-between
+                        gap-3
+                      "
+                    >
+                      <span
+                        className="
+                          max-w-[150px]
+                          truncate
+                          rounded-lg
+                          border
+                          border-zinc-200
+                          px-2.5
+                          py-1.5
+                          text-[9px]
+                          text-zinc-600
+                        "
+                      >
+                        {report.category}
+                      </span>
+
+                      <span
+                        className="
+                          flex
+                          shrink-0
+                          items-center
+                          gap-1
+                          text-[9px]
+                          text-zinc-400
+                        "
+                      >
+                        <Clock3
+                          size={11}
+                        />
+
+                        {report.time}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            )
+          )
+        ) : (
+          <div
+            className="
+              flex
+              h-40
+              items-center
+              justify-center
+              px-8
+              text-center
+              text-xs
+              leading-5
+              text-zinc-400
+            "
+          >
+            No reports match your
+            filters.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
+
 
 export default ReportsSidebar;

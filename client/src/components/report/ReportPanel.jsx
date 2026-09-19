@@ -1,291 +1,436 @@
 import {
-    ImagePlus,
-    LoaderCircle,
-    MapPin,
-    X,
+  Camera,
+  CheckCircle2,
+  LocateFixed,
+  LoaderCircle,
+  MapPin,
+  ShieldCheck,
+  X,
 } from "lucide-react";
 
 import {
-    useRef,
-    useState,
+  useEffect,
+  useRef,
+  useState,
 } from "react";
 
 import {
-    analyzeReport,
+  analyzeReport,
 } from "../../services/api";
 
+import {
+  getCompactLocation,
+  searchLocations,
+} from "../../services/geocoding";
+
+
 function ReportPanel({
-    selectedPosition,
-    onSuccess,
-    onClose,
+  selectedPosition,
+  onSelectPosition,
+  onSuccess,
+  onClose,
 }) {
-    const fileInputRef =
-        useRef(null);
+  const fileInputRef =
+    useRef(null);
 
-    const [
-        location,
-        setLocation,
-    ] = useState("");
+  const [
+    location,
+    setLocation,
+  ] = useState("");
 
-    const [
-        description,
-        setDescription,
-    ] = useState("");
+  const [
+    description,
+    setDescription,
+  ] = useState("");
 
-    const [
-        photo,
-        setPhoto,
-    ] = useState(null);
+  const [
+    photo,
+    setPhoto,
+  ] = useState(null);
 
-    const [
-        loading,
-        setLoading,
-    ] = useState(false);
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
 
-    const [
-        error,
-        setError,
-    ] = useState("");
+  const [
+    locatingArea,
+    setLocatingArea,
+  ] = useState(false);
 
-    const handleSubmit =
-        async (event) => {
-            event.preventDefault();
+  const [
+    error,
+    setError,
+  ] = useState("");
 
-            setError("");
+  const [
+    locationError,
+    setLocationError,
+  ] = useState("");
 
-            if (!location.trim()) {
-                setError(
-                    "Please enter the area or location."
-                );
 
-                return;
-            }
+  useEffect(() => {
+    if (
+      selectedPosition?.location
+    ) {
+      setLocation(
+        selectedPosition.location
+      );
+    }
+  }, [
+    selectedPosition?.location,
+  ]);
 
-            if (!description.trim()) {
-                setError(
-                    "Please describe the problem."
-                );
 
-                return;
-            }
+  const handleLocateArea =
+    async () => {
+      const query =
+        location.trim();
 
-            try {
-                setLoading(true);
+      if (!query) {
+        setLocationError(
+          "Enter an area first."
+        );
 
-                const result =
-                    await analyzeReport({
-                        description:
-                            description.trim(),
+        return;
+      }
 
-                        location:
-                            location.trim(),
+      try {
+        setLocatingArea(true);
+        setLocationError("");
 
-                        photo,
-                    });
+        const results =
+          await searchLocations(
+            query
+          );
 
-                onSuccess(
-                    result
-                );
-            } catch (err) {
-                setError(
-                    err.message ||
-                    "Something went wrong."
-                );
-            } finally {
-                setLoading(false);
-            }
-        };
+        if (
+          !results ||
+          results.length === 0
+        ) {
+          setLocationError(
+            "Could not find this area."
+          );
 
-    return (
-        <div className="flex h-full flex-col bg-white">
-            <div
-                className="
+          return;
+        }
+
+        const bestResult =
+          results[0];
+
+        const lat =
+          Number(
+            bestResult.lat
+          );
+
+        const lng =
+          Number(
+            bestResult.lon
+          );
+
+        const resolvedLocation =
+          getCompactLocation(
+            bestResult.address,
+            bestResult.display_name
+          ) || query;
+
+        setLocation(
+          resolvedLocation
+        );
+
+        onSelectPosition?.({
+          lat,
+          lng,
+
+          location:
+            resolvedLocation,
+
+          displayName:
+            bestResult.display_name,
+
+          isResolvingLocation:
+            false,
+
+          source:
+            "location-search",
+        });
+      } catch (err) {
+        setLocationError(
+          err.message ||
+          "Unable to locate this area."
+        );
+      } finally {
+        setLocatingArea(false);
+      }
+    };
+
+
+  const handleLocationKeyDown =
+    (event) => {
+      if (
+        event.key === "Enter"
+      ) {
+        event.preventDefault();
+
+        handleLocateArea();
+      }
+    };
+
+
+  const handleSubmit =
+    async (event) => {
+      event.preventDefault();
+
+      setError("");
+
+      if (!location.trim()) {
+        setError(
+          "Please enter the area or location."
+        );
+
+        return;
+      }
+
+      if (
+        !description.trim()
+      ) {
+        setError(
+          "Please describe the problem."
+        );
+
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        const result =
+          await analyzeReport({
+            location:
+              location.trim(),
+
+            description:
+              description.trim(),
+
+            photo,
+
+            latitude:
+              selectedPosition?.lat ??
+              null,
+
+            longitude:
+              selectedPosition?.lng ??
+              null,
+          });
+
+        onSuccess?.(
+          result
+        );
+      } catch (err) {
+        setError(
+          err.message ||
+          "Unable to analyze the report."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+
+  return (
+    <div
+      className="
+        flex
+        h-full
+        min-h-0
+        flex-col
+        bg-white
+      "
+    >
+      <div
+        className="
+          shrink-0
           border-b
           border-zinc-200
-          bg-gradient-to-b
-          from-zinc-50
-          to-white
-          px-6
-          py-6
+          px-5
+          py-5
+          sm:px-7
+          sm:py-6
         "
+      >
+        <div
+          className="
+            flex
+            items-start
+            justify-between
+            gap-4
+          "
+        >
+          <div>
+            <div
+              className="
+                mb-3
+                inline-flex
+                items-center
+                gap-2
+                rounded-full
+                bg-black
+                px-3
+                py-1.5
+                text-[9px]
+                font-bold
+                uppercase
+                tracking-[0.14em]
+                text-[#E8FF00]
+                sm:mb-4
+                sm:text-[10px]
+              "
             >
-                <div className="mb-5 flex items-center justify-between">
-                    <div
-                        className="
-              inline-flex
-              items-center
-              gap-2
-              rounded-full
-              bg-black
-              px-3
-              py-1.5
-              text-[10px]
-              font-extrabold
-              uppercase
-              tracking-[0.14em]
-              text-[#E8FF00]
-            "
-                    >
-                        <MapPin
-                            size={12}
-                        />
+              <MapPin
+                size={12}
+              />
 
-                        New civic report
-                    </div>
-
-                    {onClose && (
-                        <button
-                            type="button"
-                            onClick={
-                                onClose
-                            }
-                            className="
-                rounded-lg
-                p-2
-                text-zinc-400
-                transition
-                hover:bg-zinc-100
-                hover:text-black
-                xl:hidden
-              "
-                        >
-                            <X
-                                size={19}
-                            />
-                        </button>
-                    )}
-                </div>
-
-                <h2
-                    className="
-            text-[27px]
-            font-black
-            tracking-[-0.04em]
-            text-black
-          "
-                >
-                    Report a problem
-                </h2>
-
-                <p
-                    className="
-            mt-2
-            max-w-[320px]
-            text-sm
-            leading-6
-            text-zinc-500
-          "
-                >
-                    Tell us what happened. We will identify
-                    the correct authority and reporting route.
-                </p>
-
-                <div className="mt-5 flex items-center gap-2">
-                    <div className="flex items-center gap-2">
-                        <span
-                            className="
-                flex
-                h-6
-                w-6
-                items-center
-                justify-center
-                rounded-full
-                bg-[#E8FF00]
-                text-[10px]
-                font-black
-                text-black
-              "
-                        >
-                            1
-                        </span>
-
-                        <span className="text-[10px] font-bold text-zinc-700">
-                            Location
-                        </span>
-                    </div>
-
-                    <div className="h-px flex-1 bg-zinc-200" />
-
-                    <div className="flex items-center gap-2">
-                        <span
-                            className="
-                flex
-                h-6
-                w-6
-                items-center
-                justify-center
-                rounded-full
-                bg-zinc-100
-                text-[10px]
-                font-bold
-                text-zinc-500
-              "
-                        >
-                            2
-                        </span>
-
-                        <span className="text-[10px] font-bold text-zinc-400">
-                            Details
-                        </span>
-                    </div>
-
-                    <div className="h-px flex-1 bg-zinc-200" />
-
-                    <div className="flex items-center gap-2">
-                        <span
-                            className="
-                flex
-                h-6
-                w-6
-                items-center
-                justify-center
-                rounded-full
-                bg-zinc-100
-                text-[10px]
-                font-bold
-                text-zinc-500
-              "
-                        >
-                            3
-                        </span>
-
-                        <span className="text-[10px] font-bold text-zinc-400">
-                            Route
-                        </span>
-                    </div>
-                </div>
+              New civic report
             </div>
 
-            <form
-                onSubmit={
-                    handleSubmit
-                }
-                className="
+            <h2
+              className="
+                text-2xl
+                font-black
+                tracking-[-0.04em]
+                text-zinc-950
+                sm:text-[28px]
+              "
+            >
+              Report a problem
+            </h2>
+
+            <p
+              className="
+                mt-2
+                max-w-[360px]
+                text-xs
+                leading-5
+                text-zinc-500
+                sm:text-sm
+                sm:leading-6
+              "
+            >
+              Tell us what happened.
+              We will identify the
+              correct authority and
+              reporting route.
+            </p>
+          </div>
+
+          {onClose && (
+            <button
+              type="button"
+              onClick={
+                onClose
+              }
+              className="
+                hidden
+                h-9
+                w-9
+                shrink-0
+                items-center
+                justify-center
+                rounded-lg
+                border
+                border-zinc-200
+                text-zinc-500
+                sm:flex
+                xl:hidden
+              "
+            >
+              <X
+                size={17}
+              />
+            </button>
+          )}
+        </div>
+
+
+        <div
+          className="
+            mt-5
+            flex
+            items-center
+            gap-2
+          "
+        >
+          <Step
+            number="1"
+            label="Location"
+            active
+          />
+
+          <div
+            className="
+              h-px
+              flex-1
+              bg-zinc-200
+            "
+          />
+
+          <Step
+            number="2"
+            label="Details"
+          />
+
+          <div
+            className="
+              h-px
+              flex-1
+              bg-zinc-200
+            "
+          />
+
+          <Step
+            number="3"
+            label="Route"
+          />
+        </div>
+      </div>
+
+
+      <form
+        onSubmit={
+          handleSubmit
+        }
+        className="
           min-h-0
           flex-1
           space-y-5
           overflow-y-auto
-          p-6
+          overscroll-contain
+          px-5
+          py-5
+          sm:space-y-6
+          sm:px-7
+          sm:py-6
         "
-            >
-                {selectedPosition && (
-                    <div
-                        className="
+      >
+        {selectedPosition && (
+          <div
+            className="
               flex
-              items-start
+              items-center
               gap-3
               rounded-xl
               border
               border-[#E8FF00]
               bg-[#FBFFE6]
-              p-3
+              px-4
+              py-3
             "
-                    >
-                        <div
-                            className="
+          >
+            <div
+              className="
                 flex
-                h-8
-                w-8
+                h-10
+                w-10
                 shrink-0
                 items-center
                 justify-center
@@ -293,247 +438,394 @@ function ReportPanel({
                 bg-black
                 text-[#E8FF00]
               "
-                        >
-                            <MapPin
-                                size={16}
-                            />
-                        </div>
+            >
+              {selectedPosition
+                .isResolvingLocation ? (
+                <LoaderCircle
+                  size={18}
+                  className="animate-spin"
+                />
+              ) : (
+                <MapPin
+                  size={18}
+                />
+              )}
+            </div>
 
-                        <div>
-                            <p className="text-xs font-bold text-black">
-                                Map location selected
-                            </p>
+            <div
+              className="
+                min-w-0
+                flex-1
+              "
+            >
+              <p
+                className="
+                  truncate
+                  text-xs
+                  font-bold
+                  text-zinc-900
+                "
+              >
+                {selectedPosition
+                  .isResolvingLocation
+                  ? "Finding area..."
+                  : selectedPosition.location ||
+                  "Map location selected"}
+              </p>
 
-                            <p className="mt-1 text-[11px] text-zinc-500">
-                                {selectedPosition.lat.toFixed(
-                                    5
-                                )}
-                                ,{" "}
-                                {selectedPosition.lng.toFixed(
-                                    5
-                                )}
-                            </p>
-                        </div>
-                    </div>
-                )}
+              <p
+                className="
+                  mt-1
+                  text-[10px]
+                  text-zinc-500
+                "
+              >
+                {Number(
+                  selectedPosition.lat
+                ).toFixed(5)}
+                ,{" "}
+                {Number(
+                  selectedPosition.lng
+                ).toFixed(5)}
+              </p>
+            </div>
 
-                <div>
-                    <label
-                        htmlFor="location"
-                        className="
+            {!selectedPosition
+              .isResolvingLocation && (
+                <CheckCircle2
+                  size={17}
+                  className="
+                  shrink-0
+                "
+                />
+              )}
+          </div>
+        )}
+
+
+        <div>
+          <label
+            htmlFor="location"
+            className="
               mb-2
               block
               text-xs
-              font-extrabold
+              font-bold
               uppercase
-              tracking-wide
-              text-zinc-700
+              text-zinc-800
             "
-                    >
-                        Area or location
-                    </label>
+          >
+            Area or location
+          </label>
 
-                    <input
-                        id="location"
-                        value={
-                            location
-                        }
-                        onChange={(
-                            event
-                        ) =>
-                            setLocation(
-                                event.target.value
-                            )
-                        }
-                        placeholder="e.g. Mirpur 10"
-                        className="
-              w-full
-              rounded-xl
-              border
-              border-zinc-200
-              bg-zinc-50
-              px-4
-              py-3
-              text-sm
-              text-black
-              outline-none
-              transition
-              placeholder:text-zinc-400
-              focus:border-black
-              focus:bg-white
-              focus:ring-4
-              focus:ring-[#E8FF00]/30
+          <div className="relative">
+            <input
+              id="location"
+              type="text"
+              value={
+                location
+              }
+              onChange={(
+                event
+              ) => {
+                setLocation(
+                  event.target.value
+                );
+
+                setLocationError(
+                  ""
+                );
+              }}
+              onKeyDown={
+                handleLocationKeyDown
+              }
+              placeholder="e.g. Mirpur 10"
+              className="
+                h-13
+                w-full
+                rounded-xl
+                border
+                border-zinc-300
+                bg-white
+                py-3.5
+                pl-4
+                pr-14
+                text-sm
+                outline-none
+                placeholder:text-zinc-400
+                focus:border-black
+                focus:ring-4
+                focus:ring-[#E8FF00]/20
+              "
+            />
+
+            <button
+              type="button"
+              onClick={
+                handleLocateArea
+              }
+              disabled={
+                locatingArea
+              }
+              className="
+                absolute
+                right-2
+                top-1/2
+                flex
+                h-9
+                w-9
+                -translate-y-1/2
+                items-center
+                justify-center
+                rounded-lg
+                bg-black
+                text-[#E8FF00]
+                disabled:opacity-50
+              "
+            >
+              {locatingArea ? (
+                <LoaderCircle
+                  size={16}
+                  className="animate-spin"
+                />
+              ) : (
+                <LocateFixed
+                  size={17}
+                />
+              )}
+            </button>
+          </div>
+
+          <p
+            className="
+              mt-2
+              text-[10px]
+              text-zinc-400
             "
-                    />
-                </div>
+          >
+            Type an area and press
+            Enter or use the location
+            button.
+          </p>
 
-                <div>
-                    <label
-                        htmlFor="description"
-                        className="
+          {locationError && (
+            <p
+              className="
+                mt-2
+                text-[10px]
+                font-medium
+                text-red-600
+              "
+            >
+              {locationError}
+            </p>
+          )}
+        </div>
+
+
+        <div>
+          <div
+            className="
               mb-2
-              block
-              text-xs
-              font-extrabold
-              uppercase
-              tracking-wide
-              text-zinc-700
+              flex
+              justify-between
             "
-                    >
-                        What is the problem?
-                    </label>
+          >
+            <label
+              htmlFor="description"
+              className="
+                text-xs
+                font-bold
+                uppercase
+              "
+            >
+              What is the problem?
+            </label>
 
-                    <textarea
-                        id="description"
-                        value={
-                            description
-                        }
-                        onChange={(
-                            event
-                        ) =>
-                            setDescription(
-                                event.target.value
-                            )
-                        }
-                        rows={5}
-                        placeholder="Describe the issue clearly..."
-                        className="
+            <span
+              className="
+                text-[10px]
+                text-zinc-400
+              "
+            >
+              Required
+            </span>
+          </div>
+
+          <textarea
+            id="description"
+            rows={5}
+            value={
+              description
+            }
+            onChange={(
+              event
+            ) =>
+              setDescription(
+                event.target.value
+              )
+            }
+            placeholder="Describe the issue clearly..."
+            className="
               w-full
               resize-none
               rounded-xl
               border
-              border-zinc-200
-              bg-zinc-50
+              border-zinc-300
               px-4
-              py-3
+              py-3.5
               text-sm
               leading-6
-              text-black
               outline-none
-              transition
               placeholder:text-zinc-400
               focus:border-black
-              focus:bg-white
               focus:ring-4
-              focus:ring-[#E8FF00]/30
+              focus:ring-[#E8FF00]/20
+              sm:min-h-[170px]
             "
-                    />
-                </div>
+          />
+        </div>
 
-                <div>
-                    <label
-                        className="
+
+        <div>
+          <div
+            className="
               mb-2
-              block
-              text-xs
-              font-extrabold
-              uppercase
-              tracking-wide
-              text-zinc-700
+              flex
+              justify-between
             "
-                    >
-                        Photo
+          >
+            <label
+              className="
+                text-xs
+                font-bold
+                uppercase
+              "
+            >
+              Photo
+            </label>
 
-                        <span className="ml-1 normal-case font-normal tracking-normal text-zinc-400">
-                            optional
-                        </span>
-                    </label>
+            <span
+              className="
+                text-[10px]
+                text-zinc-400
+              "
+            >
+              Optional
+            </span>
+          </div>
 
-                    <input
-                        ref={
-                            fileInputRef
-                        }
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={(
-                            event
-                        ) =>
-                            setPhoto(
-                                event.target.files?.[
-                                0
-                                ] || null
-                            )
-                        }
-                        className="hidden"
-                    />
+          <input
+            ref={
+              fileInputRef
+            }
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(
+              event
+            ) =>
+              setPhoto(
+                event.target.files?.[
+                0
+                ] || null
+              )
+            }
+            className="hidden"
+          />
 
-                    <button
-                        type="button"
-                        onClick={() =>
-                            fileInputRef.current?.click()
-                        }
-                        className="
+          <button
+            type="button"
+            onClick={() =>
+              fileInputRef.current?.click()
+            }
+            className="
               flex
               w-full
-              flex-col
               items-center
-              justify-center
+              gap-4
               rounded-xl
-              border-2
+              border
               border-dashed
               border-zinc-300
               bg-zinc-50
               px-4
-              py-6
-              text-center
-              transition
-              hover:border-[#E8FF00]
-              hover:bg-[#FBFFE6]
+              py-4
+              text-left
             "
-                    >
-                        <div
-                            className="
-                mb-3
+          >
+            <div
+              className="
                 flex
-                h-10
-                w-10
+                h-11
+                w-11
+                shrink-0
                 items-center
                 justify-center
-                rounded-xl
+                rounded-lg
                 bg-black
                 text-[#E8FF00]
               "
-                        >
-                            <ImagePlus
-                                size={20}
-                            />
-                        </div>
+            >
+              <Camera
+                size={19}
+              />
+            </div>
 
-                        <span className="max-w-full truncate text-sm font-bold text-zinc-800">
-                            {photo
-                                ? photo.name
-                                : "Upload a photo"}
-                        </span>
+            <div className="min-w-0">
+              <p
+                className="
+                  truncate
+                  text-xs
+                  font-semibold
+                "
+              >
+                {photo
+                  ? photo.name
+                  : "Upload a photo"}
+              </p>
 
-                        <span className="mt-1 text-[10px] text-zinc-400">
-                            JPEG, PNG or WebP · max 5 MB
-                        </span>
-                    </button>
-                </div>
+              <p
+                className="
+                  mt-1
+                  text-[10px]
+                  text-zinc-400
+                "
+              >
+                JPEG, PNG or WebP · max 5 MB
+              </p>
+            </div>
+          </button>
+        </div>
 
-                {error && (
-                    <div
-                        className="
+
+        {error && (
+          <div
+            className="
               rounded-xl
               border
               border-red-200
               bg-red-50
               px-4
               py-3
-              text-sm
+              text-xs
+              leading-5
               text-red-700
             "
-                    >
-                        {error}
-                    </div>
-                )}
+          >
+            {error}
+          </div>
+        )}
 
-                <button
-                    type="submit"
-                    disabled={
-                        loading
-                    }
-                    className="
+
+        <button
+          type="submit"
+          disabled={
+            loading ||
+            locatingArea ||
+            selectedPosition
+              ?.isResolvingLocation
+          }
+          className="
             flex
             w-full
             items-center
@@ -541,34 +833,93 @@ function ReportPanel({
             gap-2
             rounded-xl
             bg-[#E8FF00]
-            px-4
+            px-5
             py-3.5
             text-sm
             font-black
             text-black
-            shadow-[0_10px_25px_rgba(232,255,0,0.18)]
-            transition
-            hover:bg-[#F1FF59]
-            hover:shadow-[0_12px_30px_rgba(232,255,0,0.28)]
-            active:scale-[0.99]
-            disabled:cursor-not-allowed
             disabled:opacity-50
           "
-                >
-                    {loading && (
-                        <LoaderCircle
-                            size={18}
-                            className="animate-spin"
-                        />
-                    )}
+        >
+          {loading ? (
+            <>
+              <LoaderCircle
+                size={17}
+                className="animate-spin"
+              />
 
-                    {loading
-                        ? "Analyzing report..."
-                        : "Analyze & find authority"}
-                </button>
-            </form>
-        </div>
-    );
+              Analyzing report...
+            </>
+          ) : (
+            <>
+              <ShieldCheck
+                size={17}
+              />
+
+              Report & find authority
+            </>
+          )}
+        </button>
+
+        <div className="h-3" />
+      </form>
+    </div>
+  );
 }
+
+
+function Step({
+  number,
+  label,
+  active = false,
+}) {
+  return (
+    <div
+      className="
+        flex
+        shrink-0
+        items-center
+        gap-1.5
+      "
+    >
+      <span
+        className={`
+          flex
+          h-7
+          w-7
+          items-center
+          justify-center
+          rounded-full
+          text-[10px]
+          font-black
+
+          ${active
+            ? "bg-[#E8FF00] text-black"
+            : "bg-zinc-100 text-zinc-500"
+          }
+        `}
+      >
+        {number}
+      </span>
+
+      <span
+        className={`
+          hidden
+          text-[10px]
+          font-bold
+          min-[360px]:inline
+
+          ${active
+            ? "text-zinc-900"
+            : "text-zinc-400"
+          }
+        `}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
 
 export default ReportPanel;
