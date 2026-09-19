@@ -51,7 +51,7 @@ class IssueClassification(BaseModel):
 
 
 model = ChatGoogleGenerativeAI(
-    model="gemini-3.8-flash",
+    model="gemini-3.5-flash-lite",
     thinking_level="low",
 )
 

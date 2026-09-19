@@ -13,10 +13,17 @@ import {
     useMap,
 } from "react-leaflet";
 
+import {
+    getCompactLocation,
+    searchLocations,
+} from "../../services/geocoding";
+
+
 function MapSearch({
     onSelectPosition,
 }) {
-    const map = useMap();
+    const map =
+        useMap();
 
     const [
         query,
@@ -38,45 +45,27 @@ function MapSearch({
         setError,
     ] = useState("");
 
+
     const handleSearch =
         async (event) => {
             event.preventDefault();
 
-            const trimmedQuery =
+            const value =
                 query.trim();
 
-            if (!trimmedQuery) {
+            if (!value) {
                 return;
             }
 
             setSearching(true);
-            setError("");
             setResults([]);
+            setError("");
 
             try {
-                const searchQuery =
-                    `${trimmedQuery}, Dhaka, Bangladesh`;
-
-                const response =
-                    await fetch(
-                        "https://nominatim.openstreetmap.org/search?" +
-                        new URLSearchParams({
-                            q: searchQuery,
-                            format: "json",
-                            addressdetails: "1",
-                            limit: "5",
-                            countrycodes: "bd",
-                        })
-                    );
-
-                if (!response.ok) {
-                    throw new Error(
-                        "Search failed"
-                    );
-                }
-
                 const data =
-                    await response.json();
+                    await searchLocations(
+                        value
+                    );
 
                 if (
                     data.length === 0
@@ -91,8 +80,11 @@ function MapSearch({
                 setResults(
                     data
                 );
-            } catch {
+            } catch (
+            searchError
+            ) {
                 setError(
+                    searchError.message ||
                     "Unable to search location."
                 );
             } finally {
@@ -101,6 +93,7 @@ function MapSearch({
                 );
             }
         };
+
 
     const handleSelect = (
         result
@@ -115,6 +108,12 @@ function MapSearch({
                 result.lon
             );
 
+        const location =
+            getCompactLocation(
+                result.address,
+                result.display_name
+            );
+
         map.flyTo(
             [
                 lat,
@@ -122,38 +121,45 @@ function MapSearch({
             ],
             16,
             {
-                duration:
-                    1.2,
+                duration: 1,
             }
         );
 
         onSelectPosition({
             lat,
             lng,
+            location,
+            displayName:
+                result.display_name,
+            isResolvingLocation:
+                false,
         });
 
         setQuery(
-            result.display_name
+            location
         );
 
         setResults([]);
     };
 
-    const handleClear = () => {
-        setQuery("");
-        setResults([]);
-        setError("");
-    };
+
+    const handleClear =
+        () => {
+            setQuery("");
+            setResults([]);
+            setError("");
+        };
+
 
     return (
         <div
             className="
         absolute
         left-1/2
-        top-5
+        top-6
         z-[700]
         w-[calc(100%-2rem)]
-        max-w-[500px]
+        max-w-[620px]
         -translate-x-1/2
       "
         >
@@ -163,22 +169,21 @@ function MapSearch({
                 }
                 className="
           flex
+          h-16
           items-center
-          gap-2
           rounded-2xl
           border
-          border-white/20
-          bg-black/95
+          border-white/10
+          bg-[#090909]
           p-2
           shadow-2xl
-          backdrop-blur-xl
         "
             >
                 <div
                     className="
             flex
-            h-10
-            w-10
+            h-12
+            w-12
             shrink-0
             items-center
             justify-center
@@ -188,7 +193,7 @@ function MapSearch({
           "
                 >
                     <Search
-                        size={18}
+                        size={20}
                     />
                 </div>
 
@@ -208,9 +213,8 @@ function MapSearch({
             min-w-0
             flex-1
             bg-transparent
-            px-1
+            px-4
             text-sm
-            font-medium
             text-white
             outline-none
             placeholder:text-zinc-500
@@ -224,15 +228,14 @@ function MapSearch({
                             handleClear
                         }
                         className="
+              mr-1
               flex
-              h-9
-              w-9
+              h-10
+              w-10
               items-center
               justify-center
-              rounded-lg
               text-zinc-500
               transition
-              hover:bg-white/10
               hover:text-white
             "
                     >
@@ -249,18 +252,19 @@ function MapSearch({
                     }
                     className="
             flex
-            h-10
+            h-12
+            min-w-[96px]
             items-center
             justify-center
             rounded-xl
             bg-[#E8FF00]
-            px-4
-            text-xs
-            font-black
+            px-5
+            text-sm
+            font-bold
             text-black
             transition
             hover:bg-[#F1FF59]
-            disabled:opacity-60
+            disabled:opacity-50
           "
                 >
                     {searching ? (
@@ -281,7 +285,7 @@ function MapSearch({
                         className="
             mt-2
             overflow-hidden
-            rounded-2xl
+            rounded-xl
             border
             border-zinc-200
             bg-white
@@ -289,79 +293,94 @@ function MapSearch({
           "
                     >
                         {error && (
-                            <div className="px-4 py-4 text-sm text-zinc-500">
+                            <div
+                                className="
+                px-4
+                py-3
+                text-xs
+                text-zinc-500
+              "
+                            >
                                 {error}
                             </div>
                         )}
 
                         {results.map(
-                            (result) => (
-                                <button
-                                    key={
-                                        result.place_id
-                                    }
-                                    type="button"
-                                    onClick={() =>
-                                        handleSelect(
-                                            result
-                                        )
-                                    }
-                                    className="
-                  flex
-                  w-full
-                  items-start
-                  gap-3
-                  border-b
-                  border-zinc-100
-                  px-4
-                  py-3
-                  text-left
-                  transition
-                  last:border-b-0
-                  hover:bg-[#FBFFE6]
-                "
-                                >
-                                    <div
+                            (result) => {
+                                const name =
+                                    getCompactLocation(
+                                        result.address,
+                                        result.display_name
+                                    );
+
+                                return (
+                                    <button
+                                        key={
+                                            result.place_id
+                                        }
+                                        type="button"
+                                        onClick={() =>
+                                            handleSelect(
+                                                result
+                                            )
+                                        }
                                         className="
-                    mt-0.5
                     flex
-                    h-8
-                    w-8
-                    shrink-0
-                    items-center
-                    justify-center
-                    rounded-lg
-                    bg-black
-                    text-[#E8FF00]
+                    w-full
+                    items-start
+                    gap-3
+                    border-b
+                    border-zinc-100
+                    px-4
+                    py-3
+                    text-left
+                    transition
+                    last:border-b-0
+                    hover:bg-zinc-50
                   "
                                     >
                                         <MapPin
-                                            size={15}
-                                        />
-                                    </div>
-
-                                    <div className="min-w-0">
-                                        <p
+                                            size={16}
                                             className="
-                      line-clamp-2
-                      text-xs
-                      font-bold
-                      leading-5
-                      text-zinc-900
+                      mt-0.5
+                      shrink-0
+                      text-zinc-500
                     "
-                                        >
-                                            {
-                                                result.display_name
-                                            }
-                                        </p>
-                                    </div>
-                                </button>
-                            )
+                                        />
+
+                                        <div className="min-w-0">
+                                            <p
+                                                className="
+                        text-xs
+                        font-semibold
+                        text-zinc-900
+                      "
+                                            >
+                                                {name}
+                                            </p>
+
+                                            <p
+                                                className="
+                        mt-1
+                        line-clamp-1
+                        text-[10px]
+                        text-zinc-400
+                      "
+                                            >
+                                                {
+                                                    result.display_name
+                                                }
+                                            </p>
+                                        </div>
+                                    </button>
+                                );
+                            }
                         )}
                     </div>
                 )}
         </div>
     );
 }
+
 
 export default MapSearch;
