@@ -1,4 +1,5 @@
 import base64
+import os
 
 from contextlib import (
     asynccontextmanager,
@@ -29,8 +30,6 @@ from app.db import (
     init_db,
 )
 
-from app.graph.workflow import graph
-
 from app.schemas.report import (
     ReportStatusUpdate,
 )
@@ -46,7 +45,6 @@ from app.services.report_repository import (
 from app.services.reporting import (
     build_action_plan,
 )
-
 
 REPORT_UPLOAD_DIR.mkdir(
     parents=True,
@@ -68,12 +66,29 @@ app = FastAPI(
 )
 
 
+frontend_url = (
+    os.getenv(
+        "FRONTEND_URL",
+        "",
+    )
+    .strip()
+    .rstrip("/")
+)
+
+
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+
+if frontend_url:
+    allowed_origins.append(frontend_url)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -82,11 +97,7 @@ app.add_middleware(
 
 app.mount(
     "/uploads",
-    StaticFiles(
-        directory=str(
-            REPORT_UPLOAD_DIR
-        )
-    ),
+    StaticFiles(directory=str(REPORT_UPLOAD_DIR)),
     name="uploads",
 )
 
@@ -94,17 +105,12 @@ app.mount(
 def build_report_title(
     description,
 ):
-    text = " ".join(
-        description.split()
-    )
+    text = " ".join(description.split())
 
     if len(text) <= 80:
         return text
 
-    return (
-        text[:77].rstrip()
-        + "..."
-    )
+    return text[:77].rstrip() + "..."
 
 
 def save_photo(
@@ -118,25 +124,13 @@ def save_photo(
         "image/webp": ".webp",
     }
 
-    extension = (
-        extension_map[
-            mime_type
-        ]
-    )
+    extension = extension_map[mime_type]
 
-    filename = (
-        f"{public_id}"
-        f"{extension}"
-    )
+    filename = f"{public_id}" f"{extension}"
 
-    file_path = (
-        REPORT_UPLOAD_DIR
-        / filename
-    )
+    file_path = REPORT_UPLOAD_DIR / filename
 
-    file_path.write_bytes(
-        image_bytes
-    )
+    file_path.write_bytes(image_bytes)
 
     return filename
 
@@ -148,51 +142,34 @@ def health_check():
     }
 
 
-@app.post(
-    "/api/reports/analyze"
-)
+@app.post("/api/reports/analyze")
 async def analyze_report(
     description: str = Form(...),
     location: str = Form(...),
-
-    latitude: float | None = Form(
-        None
-    ),
-
-    longitude: float | None = Form(
-        None
-    ),
-
-    photo: UploadFile | None = File(
-        None
-    ),
+    latitude: float | None = Form(None),
+    longitude: float | None = Form(None),
+    photo: UploadFile | None = File(None),
 ):
-    description = (
-        description.strip()
-    )
+    description = description.strip()
 
-    location = (
-        location.strip()
-    )
+    location = location.strip()
 
     if not description:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Description is required."
-            ),
+            detail=("Description is required."),
         )
 
     if not location:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Location is required."
-            ),
+            detail=("Location is required."),
         )
 
     image_base64 = None
+
     image_mime_type = None
+
     image_bytes = None
 
     if photo is not None:
@@ -202,90 +179,55 @@ async def analyze_report(
             "image/webp",
         )
 
-        if (
-            photo.content_type
-            not in allowed_types
-        ):
+        if photo.content_type not in allowed_types:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "Only JPEG, PNG, "
-                    "and WebP images "
-                    "are allowed."
-                ),
+                detail=("Only JPEG, PNG, " "and WebP images " "are allowed."),
             )
 
-        image_bytes = (
-            await photo.read()
-        )
+        image_bytes = await photo.read()
 
-        if (
-            len(image_bytes)
-            > 5 * 1024 * 1024
-        ):
+        if len(image_bytes) > 5 * 1024 * 1024:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "Image must be "
-                    "smaller than 5 MB."
-                ),
+                detail=("Image must be " "smaller than 5 MB."),
             )
 
-        image_base64 = (
-            base64
-            .b64encode(
-                image_bytes
-            )
-            .decode(
-                "utf-8"
-            )
-        )
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-        image_mime_type = (
-            photo.content_type
-        )
+        image_mime_type = photo.content_type
 
     initial_state = {
-        "description":
-            description,
-
-        "location":
-            location,
-
-        "image_base64":
-            image_base64,
-
-        "image_mime_type":
-            image_mime_type,
-
-        "retrieval_attempts":
-            0,
+        "description": description,
+        "location": location,
+        "image_base64": image_base64,
+        "image_mime_type": image_mime_type,
+        "retrieval_attempts": 0,
     }
 
     try:
-        result = (
-            await run_in_threadpool(
-                graph.invoke,
-                initial_state,
-            )
+        # IMPORTANT:
+        # Heavy LangGraph / RAG dependencies
+        # are loaded only when a report is analyzed.
+        #
+        # This keeps Render startup fast enough
+        # to bind the HTTP port first.
+        from app.graph.workflow import graph
+
+        result = await run_in_threadpool(
+            graph.invoke,
+            initial_state,
         )
 
     except Exception as error:
-        error_message = str(
-            error
-        )
+        error_message = str(error)
 
         print(
             "Analyze report error:",
             repr(error),
         )
 
-        if (
-            "RESOURCE_EXHAUSTED"
-            in error_message
-            or "429"
-            in error_message
-        ):
+        if "RESOURCE_EXHAUSTED" in error_message or "429" in error_message:
             raise HTTPException(
                 status_code=503,
                 detail=(
@@ -298,16 +240,10 @@ async def analyze_report(
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Unable to analyze the report."
-            ),
+            detail=("Unable to analyze the report."),
         )
 
-    action_plan = (
-        build_action_plan(
-            result
-        )
-    )
+    action_plan = build_action_plan(result)
 
     result = {
         **result,
@@ -316,19 +252,13 @@ async def analyze_report(
 
     saved_report = None
 
-    category = result.get(
-        "category"
-    )
+    category = result.get("category")
 
-    location_valid = result.get(
-        "location_valid"
-    )
+    location_valid = result.get("location_valid")
 
-    needs_clarification = (
-        result.get(
-            "needs_clarification",
-            False,
-        )
+    needs_clarification = result.get(
+        "needs_clarification",
+        False,
     )
 
     can_save = (
@@ -339,320 +269,95 @@ async def analyze_report(
     )
 
     if can_save:
-        evidence_sufficient = (
-            bool(
-                result.get(
-                    "evidence_sufficient"
-                )
-            )
-        )
+        evidence_sufficient = bool(result.get("evidence_sufficient"))
 
-        authority = result.get(
-            "authority"
-        )
+        authority = result.get("authority")
 
         routing_status = (
-            "Routed"
-            if (
-                authority
-                and evidence_sufficient
-            )
-            else "Needs review"
+            "Routed" if (authority and evidence_sufficient) else "Needs review"
         )
 
-        saved_report = (
-            create_report(
-                {
-                    "title":
-                        build_report_title(
-                            description
-                        ),
-
-                    "description":
-                        description,
-
-                    "location":
-                        location,
-
-                    "latitude":
-                        latitude,
-
-                    "longitude":
-                        longitude,
-
-                    "category":
-                        category,
-
-                    "category_confidence":
-                        result.get(
-                            "category_confidence"
-                        ),
-
-                    "jurisdiction":
-                        result.get(
-                            "jurisdiction"
-                        ),
-
-                    "authority":
-                        authority,
-
-                    "authority_source":
-                        result.get(
-                            "authority_source"
-                        ),
-
-                    "authority_evidence":
-                        result.get(
-                            "authority_evidence"
-                        ),
-
-                    "evidence_sufficient":
-                        evidence_sufficient,
-
-                    "visual_evidence":
-                        result.get(
-                            "visual_evidence"
-                        ),
-
-                    "reporting_method":
-                        result.get(
-                            "reporting_method"
-                        ),
-
-                    "reporting_url":
-                        result.get(
-                            "reporting_url"
-                        ),
-
-                    "next_step":
-                        result.get(
-                            "next_step"
-                        ),
-
-                    "copyable_complaint":
-                        result.get(
-                            "complaint_text"
-                        ),
-
-                    "issue_status":
-                        "Open",
-
-                    "routing_status":
-                        routing_status,
-
-                    "official_submission_status":
-                        "Not submitted",
-                }
-            )
+        saved_report = create_report(
+            {
+                "title": build_report_title(description),
+                "description": description,
+                "location": location,
+                "latitude": latitude,
+                "longitude": longitude,
+                "category": category,
+                "category_confidence": result.get("category_confidence"),
+                "jurisdiction": result.get("jurisdiction"),
+                "authority": authority,
+                "authority_source": result.get("authority_source"),
+                "authority_evidence": result.get("authority_evidence"),
+                "evidence_sufficient": evidence_sufficient,
+                "visual_evidence": result.get("visual_evidence"),
+                "reporting_method": result.get("reporting_method"),
+                "reporting_url": result.get("reporting_url"),
+                "next_step": result.get("next_step"),
+                "copyable_complaint": result.get("complaint_text"),
+                "issue_status": "Open",
+                "routing_status": routing_status,
+                "official_submission_status": "Not submitted",
+            }
         )
 
-        if (
-            saved_report
-            and image_bytes
-            and image_mime_type
-        ):
-            filename = (
-                save_photo(
-                    public_id=
-                        saved_report[
-                            "public_id"
-                        ],
-
-                    image_bytes=
-                        image_bytes,
-
-                    mime_type=
-                        image_mime_type,
-                )
+        if saved_report and image_bytes and image_mime_type:
+            filename = save_photo(
+                public_id=saved_report["public_id"],
+                image_bytes=image_bytes,
+                mime_type=image_mime_type,
             )
 
-            saved_report = (
-                set_report_photo(
-                    saved_report[
-                        "public_id"
-                    ],
-                    filename,
-                )
+            saved_report = set_report_photo(
+                saved_report["public_id"],
+                filename,
             )
 
     return {
-        "report_id":
-            (
-                saved_report[
-                    "public_id"
-                ]
-                if saved_report
-                else None
-            ),
-
-        "report_saved":
-            saved_report
-            is not None,
-
-        "issue_status":
-            (
-                saved_report[
-                    "issue_status"
-                ]
-                if saved_report
-                else None
-            ),
-
-        "routing_status":
-            (
-                saved_report[
-                    "routing_status"
-                ]
-                if saved_report
-                else None
-            ),
-
-        "official_submission_status":
-            (
-                saved_report[
-                    "official_submission_status"
-                ]
-                if saved_report
-                else None
-            ),
-
-        "description":
-            result.get(
-                "description",
-                description,
-            ),
-
-        "location":
-            result.get(
-                "location",
-                location,
-            ),
-
-        "latitude":
-            latitude,
-
-        "longitude":
-            longitude,
-
-        "location_valid":
-            result.get(
-                "location_valid"
-            ),
-
-        "jurisdiction":
-            result.get(
-                "jurisdiction"
-            ),
-
-        "jurisdiction_area":
-            result.get(
-                "jurisdiction_area"
-            ),
-
-        "jurisdiction_source":
-            result.get(
-                "jurisdiction_source"
-            ),
-
-        "detected_category":
-            result.get(
-                "category"
-            ),
-
-        "confidence":
-            result.get(
-                "category_confidence"
-            ),
-
-        "image_relevant":
-            result.get(
-                "image_relevant"
-            ),
-
-        "visual_evidence":
-            result.get(
-                "visual_evidence"
-            ),
-
-        "needs_clarification":
-            result.get(
-                "needs_clarification"
-            ),
-
-        "clarification_question":
-            result.get(
-                "clarification_question"
-            ),
-
-        "authority":
-            result.get(
-                "authority"
-            ),
-
-        "evidence_sufficient":
-            result.get(
-                "evidence_sufficient"
-            ),
-
-        "authority_evidence":
-            result.get(
-                "authority_evidence"
-            ),
-
-        "authority_source":
-            result.get(
-                "authority_source"
-            ),
-
-        "authority_distance":
-            result.get(
-                "authority_distance"
-            ),
-
-        "reporting_method":
-            result.get(
-                "reporting_method"
-            ),
-
-        "reporting_url":
-            result.get(
-                "reporting_url"
-            ),
-
-        "reporting_phone":
-            result.get(
-                "reporting_phone"
-            ),
-
-        "reporting_email":
-            result.get(
-                "reporting_email"
-            ),
-
-        "next_step":
-            result.get(
-                "next_step"
-            ),
-
-        "copyable_complaint":
-            result.get(
-                "complaint_text"
-            ),
-
-        "photo_url":
-            (
-                saved_report[
-                    "photo_url"
-                ]
-                if saved_report
-                else None
-            ),
+        "report_id": (saved_report["public_id"] if saved_report else None),
+        "report_saved": saved_report is not None,
+        "issue_status": (saved_report["issue_status"] if saved_report else None),
+        "routing_status": (saved_report["routing_status"] if saved_report else None),
+        "official_submission_status": (
+            saved_report["official_submission_status"] if saved_report else None
+        ),
+        "description": result.get(
+            "description",
+            description,
+        ),
+        "location": result.get(
+            "location",
+            location,
+        ),
+        "latitude": latitude,
+        "longitude": longitude,
+        "location_valid": result.get("location_valid"),
+        "jurisdiction": result.get("jurisdiction"),
+        "jurisdiction_area": result.get("jurisdiction_area"),
+        "jurisdiction_source": result.get("jurisdiction_source"),
+        "detected_category": result.get("category"),
+        "confidence": result.get("category_confidence"),
+        "image_relevant": result.get("image_relevant"),
+        "visual_evidence": result.get("visual_evidence"),
+        "needs_clarification": result.get("needs_clarification"),
+        "clarification_question": result.get("clarification_question"),
+        "authority": result.get("authority"),
+        "evidence_sufficient": result.get("evidence_sufficient"),
+        "authority_evidence": result.get("authority_evidence"),
+        "authority_source": result.get("authority_source"),
+        "authority_distance": result.get("authority_distance"),
+        "reporting_method": result.get("reporting_method"),
+        "reporting_url": result.get("reporting_url"),
+        "reporting_phone": result.get("reporting_phone"),
+        "reporting_email": result.get("reporting_email"),
+        "next_step": result.get("next_step"),
+        "copyable_complaint": result.get("complaint_text"),
+        "photo_url": (saved_report["photo_url"] if saved_report else None),
     }
 
 
-@app.get(
-    "/api/reports"
-)
+@app.get("/api/reports")
 def get_reports(
     limit: int = 100,
     offset: int = 0,
@@ -670,66 +375,48 @@ def get_reports(
         0,
     )
 
-    reports = (
-        list_reports(
-            limit=limit,
-            offset=offset,
-        )
+    reports = list_reports(
+        limit=limit,
+        offset=offset,
     )
 
     return {
         "reports": reports,
-        "count": len(
-            reports
-        ),
+        "count": len(reports),
     }
 
 
-@app.get(
-    "/api/reports/{report_id}"
-)
+@app.get("/api/reports/{report_id}")
 def get_report_by_id(
     report_id: str,
 ):
-    report = get_report(
-        report_id
-    )
+    report = get_report(report_id)
 
     if report is None:
         raise HTTPException(
             status_code=404,
-            detail=(
-                "Report not found."
-            ),
+            detail=("Report not found."),
         )
 
     return report
 
 
-@app.patch(
-    "/api/reports/{report_id}"
-)
+@app.patch("/api/reports/{report_id}")
 def patch_report(
     report_id: str,
     payload: ReportStatusUpdate,
 ):
-    existing = get_report(
-        report_id
-    )
+    existing = get_report(report_id)
 
     if existing is None:
         raise HTTPException(
             status_code=404,
-            detail=(
-                "Report not found."
-            ),
+            detail=("Report not found."),
         )
 
     updated = update_report(
         report_id,
-        payload.model_dump(
-            exclude_none=True
-        ),
+        payload.model_dump(exclude_none=True),
     )
 
     return updated
