@@ -9,7 +9,7 @@
 <br />
 
 <img
-  src="client/public/assets/landing_page.png"
+  src="client/public/landing_page.png"
   alt="FixMyDhaka Application Preview"
   width="100%"
 />
