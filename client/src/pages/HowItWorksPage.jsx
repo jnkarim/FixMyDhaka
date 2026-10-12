@@ -324,47 +324,6 @@ export default function HowItWorksPage() {
             </div>
           </section>
 
-          {/* Explain the system architecture in approachable terms */}
-          <section className="mt-20 grid gap-7 overflow-hidden rounded-[28px] border border-zinc-200 bg-white p-6 sm:p-9 lg:grid-cols-[minmax(0,0.93fr)_minmax(0,1.07fr)] lg:gap-12 lg:p-12">
-            <div className="flex flex-col justify-between">
-              <div>
-                <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8FF00]">
-                  <Workflow size={24} aria-hidden="true" />
-                </div>
-                <SectionHeading
-                  eyebrow="BEHIND THE SCENES"
-                  title="How the system makes sense of a report."
-                  subtitle="It is more than a chatbot prediction. Several focused components work together to process the issue and support the suggested authority route."
-                />
-              </div>
-              <div className="mt-8 rounded-2xl bg-[#F5F6ED] p-5">
-                <p className="flex items-center gap-2 text-sm font-extrabold text-zinc-900">
-                  <ShieldCheck size={18} className="text-[#798600]" aria-hidden="true" />
-                  Evidence matters
-                </p>
-                <p className="mt-2 text-sm leading-7 text-zinc-600">
-                  A suggested route should be supported by relevant service information. If the evidence is not sufficient, the report can be marked as needing review.
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {engine.map((item, index) => {
-                const Icon = item.icon;
-                return (
-                  <div key={item.title} className={`rounded-2xl border p-5 sm:p-6 ${index === 0 ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-200 bg-[#FAFAF9] text-zinc-950"}`}>
-                    <div className={`grid h-10 w-10 place-items-center rounded-xl ${index === 0 ? "bg-[#E8FF00] text-black" : "bg-zinc-100 text-zinc-900"}`}>
-                      <Icon size={20} aria-hidden="true" />
-                    </div>
-                    <h3 className="mt-5 text-lg font-black tracking-tight">{item.title}</h3>
-                    <p className={`mt-2 text-sm leading-6 ${index === 0 ? "text-zinc-300" : "text-zinc-600"}`}>
-                      {item.text}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
           {/* Live interactive example (illustrative, no API request) */}
           <section id="routing-example" className="scroll-mt-10 pt-20 sm:pt-24">
             <SectionHeading
