@@ -302,6 +302,48 @@ export async function getReports() {
 }
 
 
+/**
+ * Load every report using the API's supported pagination.
+ * Caps at 5,000 reports; callers must display a notice if truncated.
+ */
+export async function getAllReports() {
+  const pageSize = 200;
+  const maxReports = 5000;
+  const allReports = [];
+
+  for (let offset = 0; offset < maxReports; offset += pageSize) {
+    let response;
+    try {
+      response = await fetch(
+        `${API_BASE_URL}/api/reports?limit=${pageSize}&offset=${offset}`
+      );
+    } catch {
+      throw new Error("Cannot load reports for City Insights.");
+    }
+
+    if (!response.ok) {
+      throw new Error(await readError(response));
+    }
+
+    const data = await response.json();
+    const items = Array.isArray(data.reports) ? data.reports : [];
+    allReports.push(...items);
+
+    if (items.length < pageSize) {
+      return {
+        reports: allReports.map(normalizeReport),
+        truncated: false,
+      };
+    }
+  }
+
+  return {
+    reports: allReports.map(normalizeReport),
+    truncated: true,
+  };
+}
+
+
 export async function getReport(
   reportId
 ) {

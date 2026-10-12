@@ -15,9 +15,7 @@ from app.db import (
 
 
 def utc_now():
-    return datetime.now(
-        timezone.utc
-    ).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def row_to_report(row):
@@ -29,55 +27,30 @@ def row_to_report(row):
     # Never expose this secret verifier in GET/list/PATCH responses.
     report.pop("edit_token_hash", None)
 
-    report[
-        "evidence_sufficient"
-    ] = bool(
-        report[
-            "evidence_sufficient"
-        ]
-    )
+    report["evidence_sufficient"] = bool(report["evidence_sufficient"])
 
-    photo_filename = (
-        report.get(
-            "photo_filename"
-        )
-    )
+    photo_filename = report.get("photo_filename")
 
     if photo_filename:
-        report[
-            "photo_url"
-        ] = (
-            f"/uploads/"
-            f"{photo_filename}"
-        )
+        report["photo_url"] = f"/uploads/" f"{photo_filename}"
     else:
-        report[
-            "photo_url"
-        ] = None
+        report["photo_url"] = None
 
     return report
 
 
 def create_report(data):
-    connection = (
-        get_connection()
-    )
+    connection = get_connection()
 
-    public_id = (
-        "FMD-"
-        + uuid4()
-        .hex[:8]
-        .upper()
-    )
+    public_id = "FMD-" + uuid4().hex[:8].upper()
 
     timestamp = utc_now()
     edit_token = secrets.token_urlsafe(32)
     edit_token_hash = hashlib.sha256(edit_token.encode("utf-8")).hexdigest()
 
     try:
-        cursor = (
-            connection.execute(
-                """
+        cursor = connection.execute(
+            """
                 INSERT INTO reports (
                     public_id,
                     edit_token_hash,
@@ -125,103 +98,53 @@ def create_report(data):
                     ?, ?
                 )
                 """,
-                (
-                    public_id,
-                    edit_token_hash,
-
-                    data["title"],
-                    data[
-                        "description"
-                    ],
-                    data[
-                        "location"
-                    ],
-
-                    data.get(
-                        "latitude"
-                    ),
-                    data.get(
-                        "longitude"
-                    ),
-
-                    data[
-                        "category"
-                    ],
-                    data.get(
-                        "category_confidence"
-                    ),
-
-                    data.get(
-                        "jurisdiction"
-                    ),
-
-                    data.get(
-                        "authority"
-                    ),
-                    data.get(
-                        "authority_source"
-                    ),
-                    data.get(
-                        "authority_evidence"
-                    ),
-                    int(
-                        bool(
-                            data.get(
-                                "evidence_sufficient"
-                            )
-                        )
-                    ),
-
-                    data.get(
-                        "visual_evidence"
-                    ),
-
-                    data.get(
-                        "reporting_method"
-                    ),
-                    data.get(
-                        "reporting_url"
-                    ),
-                    data.get(
-                        "next_step"
-                    ),
-                    data.get(
-                        "copyable_complaint"
-                    ),
-
-                    data.get(
-                        "issue_status",
-                        "Open",
-                    ),
-                    data.get(
-                        "routing_status",
-                        "Pending",
-                    ),
-                    data.get(
-                        "official_submission_status",
-                        "Not submitted",
-                    ),
-
-                    timestamp,
-                    timestamp,
+            (
+                public_id,
+                edit_token_hash,
+                data["title"],
+                data["description"],
+                data["location"],
+                data.get("latitude"),
+                data.get("longitude"),
+                data["category"],
+                data.get("category_confidence"),
+                data.get("jurisdiction"),
+                data.get("authority"),
+                data.get("authority_source"),
+                data.get("authority_evidence"),
+                int(bool(data.get("evidence_sufficient"))),
+                data.get("visual_evidence"),
+                data.get("reporting_method"),
+                data.get("reporting_url"),
+                data.get("next_step"),
+                data.get("copyable_complaint"),
+                data.get(
+                    "issue_status",
+                    "Open",
                 ),
-            )
+                data.get(
+                    "routing_status",
+                    "Pending",
+                ),
+                data.get(
+                    "official_submission_status",
+                    "Not submitted",
+                ),
+                timestamp,
+                timestamp,
+            ),
         )
 
         connection.commit()
 
-        row = (
-            connection.execute(
-                """
+        row = connection.execute(
+            """
                 SELECT *
                 FROM reports
                 WHERE id = ?
                 """,
-                (
-                    cursor.lastrowid,
-                ),
-            ).fetchone()
-        )
+            (cursor.lastrowid,),
+        ).fetchone()
 
         return row_to_report(row), edit_token
 
@@ -233,9 +156,7 @@ def set_report_photo(
     public_id,
     filename,
 ):
-    connection = (
-        get_connection()
-    )
+    connection = get_connection()
 
     try:
         connection.execute(
@@ -257,22 +178,16 @@ def set_report_photo(
 
         connection.commit()
 
-        row = (
-            connection.execute(
-                """
+        row = connection.execute(
+            """
                 SELECT *
                 FROM reports
                 WHERE public_id = ?
                 """,
-                (
-                    public_id,
-                ),
-            ).fetchone()
-        )
+            (public_id,),
+        ).fetchone()
 
-        return row_to_report(
-            row
-        )
+        return row_to_report(row)
 
     finally:
         connection.close()
@@ -282,14 +197,11 @@ def list_reports(
     limit=100,
     offset=0,
 ):
-    connection = (
-        get_connection()
-    )
+    connection = get_connection()
 
     try:
-        rows = (
-            connection.execute(
-                """
+        rows = connection.execute(
+            """
                 SELECT *
                 FROM reports
 
@@ -299,19 +211,13 @@ def list_reports(
                 LIMIT ?
                 OFFSET ?
                 """,
-                (
-                    limit,
-                    offset,
-                ),
-            ).fetchall()
-        )
+            (
+                limit,
+                offset,
+            ),
+        ).fetchall()
 
-        return [
-            row_to_report(
-                row
-            )
-            for row in rows
-        ]
+        return [row_to_report(row) for row in rows]
 
     finally:
         connection.close()
@@ -320,27 +226,19 @@ def list_reports(
 def get_report(
     public_id,
 ):
-    connection = (
-        get_connection()
-    )
+    connection = get_connection()
 
     try:
-        row = (
-            connection.execute(
-                """
+        row = connection.execute(
+            """
                 SELECT *
                 FROM reports
                 WHERE public_id = ?
                 """,
-                (
-                    public_id,
-                ),
-            ).fetchone()
-        )
+            (public_id,),
+        ).fetchone()
 
-        return row_to_report(
-            row
-        )
+        return row_to_report(row)
 
     finally:
         connection.close()
@@ -357,40 +255,22 @@ def update_report(
 
     clean_updates = {
         key: value
-        for key, value
-        in updates.items()
-        if (
-            key in allowed_fields
-            and value is not None
-        )
+        for key, value in updates.items()
+        if (key in allowed_fields and value is not None)
     }
 
     if not clean_updates:
-        return get_report(
-            public_id
-        )
+        return get_report(public_id)
 
-    clean_updates[
-        "updated_at"
-    ] = utc_now()
+    clean_updates["updated_at"] = utc_now()
 
-    assignments = ", ".join(
-        f"{field} = ?"
-        for field
-        in clean_updates
-    )
+    assignments = ", ".join(f"{field} = ?" for field in clean_updates)
 
-    values = list(
-        clean_updates.values()
-    )
+    values = list(clean_updates.values())
 
-    values.append(
-        public_id
-    )
+    values.append(public_id)
 
-    connection = (
-        get_connection()
-    )
+    connection = get_connection()
 
     try:
         connection.execute(
@@ -406,25 +286,20 @@ def update_report(
 
         connection.commit()
 
-        row = (
-            connection.execute(
-                """
+        row = connection.execute(
+            """
                 SELECT *
                 FROM reports
                 WHERE public_id = ?
                 """,
-                (
-                    public_id,
-                ),
-            ).fetchone()
-        )
+            (public_id,),
+        ).fetchone()
 
-        return row_to_report(
-            row
-        )
+        return row_to_report(row)
 
     finally:
         connection.close()
+
 
 def verify_report_edit_token(public_id: str, edit_token: str | None) -> bool:
     """Verify a creator-only capability token without exposing the stored hash."""

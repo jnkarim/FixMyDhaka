@@ -1,5 +1,7 @@
 import {
   FileText,
+  BarChart3,
+  BookOpen,
   Menu,
   Plus,
   X,
@@ -11,6 +13,7 @@ import {
 
 import {
   Link,
+  NavLink,
 } from "react-router-dom";
 
 import BrandLogo from "./BrandLogo";
@@ -74,7 +77,7 @@ function Header({
             hidden
             items-center
             gap-2
-            md:flex
+            lg:flex
           "
         >
           {onReportClick ? (
@@ -135,6 +138,50 @@ function Header({
           )}
 
 
+          <NavLink
+            to="/how-it-works"
+            className={({ isActive }) => `
+              flex
+              h-10
+              items-center
+              gap-2
+              rounded-lg
+              px-3
+              text-sm
+              font-semibold
+              transition
+              ${isActive
+                ? "bg-zinc-900 text-[#E8FF00]"
+                : "text-zinc-300 hover:bg-zinc-900 hover:text-white"}
+            `}
+          >
+            <BookOpen size={17} />
+            How it works
+          </NavLink>
+
+
+          <Link
+            to="/insights"
+            className="
+              flex
+              h-10
+              items-center
+              gap-2
+              rounded-lg
+              px-3
+              text-sm
+              font-semibold
+              text-zinc-300
+              transition
+              hover:bg-zinc-900
+              hover:text-white
+            "
+          >
+            <BarChart3 size={17} />
+            City insights
+          </Link>
+
+
           <Link
             to="/reports"
             className="
@@ -167,7 +214,7 @@ function Header({
             flex
             items-center
             gap-2
-            md:hidden
+            lg:hidden
           "
         >
           {onReportClick ? (
@@ -271,9 +318,53 @@ function Header({
             px-4
             py-3
             shadow-2xl
-            md:hidden
+            lg:hidden
           "
         >
+          <NavLink
+            to="/how-it-works"
+            onClick={() => setMobileMenuOpen(false)}
+            className={({ isActive }) => `
+              flex
+              items-center
+              gap-3
+              rounded-xl
+              px-4
+              py-3
+              text-sm
+              font-semibold
+              transition
+              ${isActive
+                ? "bg-zinc-900 text-[#E8FF00]"
+                : "text-zinc-200 hover:bg-zinc-900 hover:text-white"}
+            `}
+          >
+            <BookOpen size={17} />
+            How it works
+          </NavLink>
+
+          <Link
+            to="/insights"
+            onClick={() => setMobileMenuOpen(false)}
+            className="
+              flex
+              items-center
+              gap-3
+              rounded-xl
+              px-4
+              py-3
+              text-sm
+              font-semibold
+              text-zinc-200
+              transition
+              hover:bg-zinc-900
+              hover:text-white
+            "
+          >
+            <BarChart3 size={17} />
+            City insights
+          </Link>
+
           <Link
             to="/reports"
             onClick={() =>

@@ -2,9 +2,9 @@
 
 # 📍 FixMyDhaka
 
-### Smart Civic Issue Routing for Dhaka
+### AI-Powered Civic Issue Routing & City Insights for Dhaka
 
-**Report a civic problem → Find the responsible authority → Get evidence → Take the right next step**
+**Report an issue → Identify the responsible authority → Review evidence → Explore citywide reporting patterns**
 
 <br />
 
@@ -28,9 +28,11 @@
 
 <br />
 
-**FixMyDhaka helps citizens understand where a civic complaint should go without requiring them to understand complex government authority structures.**
+**FixMyDhaka helps citizens route civic complaints and explore patterns in publicly reported issues without navigating complex government authority structures.**
 
 </div>
+
+**App pages:** `/` Home · `/report` Report an issue · `/reports` Public reports · `/insights` City Insights
 
 ---
 
@@ -410,6 +412,29 @@ Users can:
 - view report locations
 - see official submission status
 
+---
+
+## 📈 City Insights — Interactive Civic Analytics
+
+The dedicated **City Insights** page is available at **`/insights`** from the desktop and mobile navigation bar. It turns the public report registry into an interactive view of reported civic issues.
+
+**Dashboard features**
+
+- **Issue hotspot map:** Interactive Leaflet circle markers group nearby reports into approximate geographic clusters. Select a cluster to inspect its report count and most common issue category.
+- **Live report summary:** Total reports in the current view, open issues, resolved reports, and approximate hotspot count.
+- **Filters:** Narrow the dashboard by issue category, issue status, or reporting period (all time, 30 days, 90 days, or 12 months).
+- **Most reported areas:** Ranked hotspot clusters based on the currently selected filters.
+- **Category breakdown:** Compare issue types and click a category to filter the dashboard.
+- **Activity trend:** A chart summarizing reports from the past six calendar months.
+- **Authority routing overview:** See report counts by assigned authority or review state.
+- **Refresh and empty/error states:** Reload reports and see clear feedback when the API is unavailable or no data matches.
+
+The page reuses the existing **`GET /api/reports`** endpoint. The frontend fetches reports in paginated requests and analyzes them in the browser; **no new backend endpoint or npm dependency is required**. To avoid silently presenting incomplete data, it warns if its 5,000-report fetch limit is reached.
+
+> **Data interpretation:** City Insights shows reports recorded in FixMyDhaka, not a comprehensive census of Dhaka's civic problems. Hotspots are approximate map-grid clusters, not a continuous heatmap. Authority routing counts do not establish that an authority received, acted on, or resolved a complaint.
+
+---
+
 # ✦ System Architecture
 
 ```text
@@ -467,6 +492,20 @@ Users can:
                                                         │
                                                         ▼
                                                 Reporting Route
+```
+
+City Insights follows a separate read-only analytics path:
+
+```text
+Public Report Registry (SQLite)
+          ↓
+GET /api/reports (FastAPI, paginated)
+          ↓
+React City Insights (/insights)
+          ├── Filter reports by category / status / date
+          ├── Group approximate location hotspots
+          ├── Summarize monthly activity and issue categories
+          └── Visualize map markers and authority counts
 ```
 
 ---
@@ -644,6 +683,14 @@ Frontend URL:
 http://localhost:5173
 ```
 
+After starting both services, visit **`http://localhost:5173/insights`** to view the standalone City Insights dashboard. It uses real reports from the API and does not invent demonstration counts when the API is offline.
+
+To check the frontend production build:
+
+```bash
+npm run build
+```
+
 ---
 
 # ✦ Environment Variables
@@ -719,8 +766,10 @@ photo
 ## Get All Reports
 
 ```http
-GET /api/reports
+GET /api/reports?limit=200&offset=0
 ```
+
+`limit` and `offset` support paginated listing. The City Insights frontend requests up to 5,000 reports in batches of 200 and indicates when the view might be incomplete.
 
 ---
 
@@ -736,15 +785,21 @@ GET /api/reports/{report_id}
 
 ```http
 PATCH /api/reports/{report_id}
+X-Report-Edit-Token: <report-specific-edit-token>
+Content-Type: application/json
 ```
 
-Example:
+Example JSON body:
 
 ```json
 {
   "official_submission_status": "Submitted externally"
 }
 ```
+
+The report edit-token security update restricts status changes to callers with that report's edit token. The token is returned when an eligible report is created; it should **not** be published in a README or shared as an example credential. In the current UI, the token is retained only for the immediate reporting session, so previous reports cannot be edited after a refresh.
+
+A status marked **"Submitted externally"** is a user-provided status, not confirmation from an official authority.
 
 ---
 
@@ -905,7 +960,7 @@ LangGraph
                   React Result Panel
 ```
 
-````
+---
 
 # ✦ Important Design Principle
 
@@ -926,7 +981,7 @@ Recorded
 Classified
 Routed
 Prepared
-````
+```
 
 It does not automatically mean the complaint has been officially submitted to a government organization.
 
@@ -954,6 +1009,10 @@ FixMyDhaka currently provides:
 ✓ Official reporting route
 
 ✓ Public civic report registry
+
+✓ City Insights dashboard with map hotspots and analytics
+
+✓ Category, status, and time filters for public reports
 
 ✓ Status tracking
 
@@ -1053,8 +1112,6 @@ It is **not an official website or service of DNCC, DSCC, DWASA, or any other go
 Authority information and reporting routes are provided to help users navigate civic services.
 
 Official complaint submission may take place through external authority-operated or government-operated platforms.
-
----
 
 ---
 
