@@ -44,13 +44,18 @@ function ResultPanel({
     setSubmissionStatus,
   ] = useState(
     result.official_submission_status ||
-      "Not submitted"
+    "Not submitted"
   );
 
   const [
     updatingStatus,
     setUpdatingStatus,
   ] = useState(false);
+
+  const [
+    statusError,
+    setStatusError,
+  ] = useState("");
 
 
   const copyTextToClipboard =
@@ -243,16 +248,16 @@ function ResultPanel({
       }
 
       try {
-        setUpdatingStatus(
-          true
-        );
+        setUpdatingStatus(true);
+        setStatusError("");
 
         await updateReportStatus(
           result.report_id,
           {
             official_submission_status:
               "Submitted externally",
-          }
+          },
+          result.edit_token
         );
 
         setSubmissionStatus(
@@ -262,6 +267,9 @@ function ResultPanel({
         console.error(
           "Status update failed:",
           error
+        );
+        setStatusError(
+          error.message || "Could not update this report."
         );
       } finally {
         setUpdatingStatus(
@@ -718,8 +726,8 @@ function ResultPanel({
 
           {(result.reporting_phone ||
             result.reporting_email) && (
-            <div
-              className="
+              <div
+                className="
                 divide-y
                 divide-zinc-100
                 overflow-hidden
@@ -728,10 +736,10 @@ function ResultPanel({
                 border-zinc-200
                 bg-white
               "
-            >
-              {result.reporting_phone && (
-                <div
-                  className="
+              >
+                {result.reporting_phone && (
+                  <div
+                    className="
                     flex
                     items-center
                     gap-3
@@ -740,21 +748,21 @@ function ResultPanel({
                     text-xs
                     text-zinc-600
                   "
-                >
-                  <Phone
-                    size={14}
-                    className="text-zinc-400"
-                  />
+                  >
+                    <Phone
+                      size={14}
+                      className="text-zinc-400"
+                    />
 
-                  {
-                    result.reporting_phone
-                  }
-                </div>
-              )}
+                    {
+                      result.reporting_phone
+                    }
+                  </div>
+                )}
 
-              {result.reporting_email && (
-                <div
-                  className="
+                {result.reporting_email && (
+                  <div
+                    className="
                     flex
                     items-center
                     gap-3
@@ -763,19 +771,19 @@ function ResultPanel({
                     text-xs
                     text-zinc-600
                   "
-                >
-                  <Mail
-                    size={14}
-                    className="text-zinc-400"
-                  />
+                  >
+                    <Mail
+                      size={14}
+                      className="text-zinc-400"
+                    />
 
-                  {
-                    result.reporting_email
-                  }
-                </div>
-              )}
-            </div>
-          )}
+                    {
+                      result.reporting_email
+                    }
+                  </div>
+                )}
+              </div>
+            )}
 
 
           {result.reporting_url && (
@@ -913,7 +921,7 @@ function ResultPanel({
 
               {result.report_id &&
                 submissionStatus !==
-                  "Submitted externally" && (
+                "Submitted externally" && (
                   <button
                     type="button"
                     onClick={
@@ -945,10 +953,16 @@ function ResultPanel({
                   </button>
                 )}
 
+              {statusError && (
+                <p role="alert" className="mt-2 text-xs text-red-600">
+                  {statusError}
+                </p>
+              )}
+
               {submissionStatus ===
                 "Submitted externally" && (
-                <div
-                  className="
+                  <div
+                    className="
                     mt-3
                     flex
                     items-center
@@ -962,14 +976,14 @@ function ResultPanel({
                     font-bold
                     text-emerald-700
                   "
-                >
-                  <Check
-                    size={15}
-                  />
+                  >
+                    <Check
+                      size={15}
+                    />
 
-                  Submitted externally
-                </div>
-              )}
+                    Submitted externally
+                  </div>
+                )}
             </div>
           )}
 

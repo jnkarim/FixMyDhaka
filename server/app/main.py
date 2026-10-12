@@ -1,5 +1,13 @@
 import base64
+import logging
+import math
 import os
+import time
+from collections import defaultdict, deque
+from io import BytesIO
+from threading import Lock
+
+from PIL import Image, UnidentifiedImageError
 
 from contextlib import (
     asynccontextmanager,
@@ -10,6 +18,8 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Header,
+    Request,
     UploadFile,
 )
 
@@ -40,6 +50,7 @@ from app.services.report_repository import (
     list_reports,
     set_report_photo,
     update_report,
+    verify_report_edit_token,
 )
 
 from app.services.reporting import (
@@ -50,6 +61,70 @@ REPORT_UPLOAD_DIR.mkdir(
     parents=True,
     exist_ok=True,
 )
+
+logger = logging.getLogger(__name__)
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_IMAGE_PIXELS = 20_000_000
+MAX_DESCRIPTION_CHARS = 2000
+MAX_LOCATION_CHARS = 250
+
+
+class AnalysisRateLimiter:
+    """Small per-process guard. Use shared edge/Redis limits in production."""
+
+    def __init__(self, max_requests=6, window_seconds=60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.lock = Lock()
+        self.requests = defaultdict(deque)
+        self.last_cleanup = 0.0
+
+    def check(self, client_key):
+        now = time.monotonic()
+        with self.lock:
+            if now - self.last_cleanup >= self.window_seconds:
+                for key in list(self.requests):
+                    calls = self.requests[key]
+                    while calls and now - calls[0] >= self.window_seconds:
+                        calls.popleft()
+                    if not calls:
+                        del self.requests[key]
+                self.last_cleanup = now
+
+            calls = self.requests[client_key]
+            while calls and now - calls[0] >= self.window_seconds:
+                calls.popleft()
+            if len(calls) >= self.max_requests:
+                return max(1, math.ceil(self.window_seconds - (now - calls[0])))
+            calls.append(now)
+            return None
+
+
+analysis_rate_limiter = AnalysisRateLimiter()
+
+
+def validate_image(image_bytes: bytes, mime_type: str) -> None:
+    expected_formats = {
+        "image/jpeg": "JPEG",
+        "image/png": "PNG",
+        "image/webp": "WEBP",
+    }
+    try:
+        with Image.open(BytesIO(image_bytes)) as image:
+            if image.format != expected_formats[mime_type]:
+                raise ValueError("The image content does not match its type.")
+            if image.width * image.height > MAX_IMAGE_PIXELS:
+                raise ValueError("Image dimensions are too large.")
+            image.verify()
+    except (
+        OSError,
+        ValueError,
+        UnidentifiedImageError,
+        Image.DecompressionBombError,
+    ) as exc:
+        raise HTTPException(
+            status_code=400, detail="Invalid or unsupported image."
+        ) from exc
 
 
 @asynccontextmanager
@@ -89,9 +164,9 @@ if frontend_url:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH"],
+    allow_headers=["Content-Type", "X-Report-Edit-Token"],
 )
 
 
@@ -144,6 +219,7 @@ def health_check():
 
 @app.post("/api/reports/analyze")
 async def analyze_report(
+    request: Request,
     description: str = Form(...),
     location: str = Form(...),
     latitude: float | None = Form(None),
@@ -161,9 +237,37 @@ async def analyze_report(
         )
 
     if not location:
+        raise HTTPException(status_code=400, detail="Location is required.")
+
+    if len(description) > MAX_DESCRIPTION_CHARS:
         raise HTTPException(
-            status_code=400,
-            detail=("Location is required."),
+            status_code=400, detail="Description is too long (max 2000 characters)."
+        )
+    if len(location) > MAX_LOCATION_CHARS:
+        raise HTTPException(
+            status_code=400, detail="Location is too long (max 250 characters)."
+        )
+
+    if (latitude is None) != (longitude is None):
+        raise HTTPException(
+            status_code=400, detail="Provide both latitude and longitude."
+        )
+    if latitude is not None and (
+        not math.isfinite(latitude)
+        or not (-90 <= latitude <= 90)
+        or not math.isfinite(longitude)
+        or not (-180 <= longitude <= 180)
+    ):
+        raise HTTPException(status_code=400, detail="Invalid coordinates.")
+
+    # Do not use untrusted X-Forwarded-For headers to construct the client key.
+    client_key = request.client.host if request.client else "unknown"
+    retry_after = analysis_rate_limiter.check(client_key)
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many analysis requests. Please retry later.",
+            headers={"Retry-After": str(retry_after)},
         )
 
     image_base64 = None
@@ -185,14 +289,16 @@ async def analyze_report(
                 detail=("Only JPEG, PNG, " "and WebP images " "are allowed."),
             )
 
-        image_bytes = await photo.read()
+        # Read at most one byte over the limit (not an arbitrary-size file).
+        image_bytes = await photo.read(MAX_IMAGE_BYTES + 1)
 
-        if len(image_bytes) > 5 * 1024 * 1024:
+        if len(image_bytes) > MAX_IMAGE_BYTES:
             raise HTTPException(
                 status_code=400,
                 detail=("Image must be " "smaller than 5 MB."),
             )
 
+        validate_image(image_bytes, photo.content_type)
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
         image_mime_type = photo.content_type
@@ -222,10 +328,7 @@ async def analyze_report(
     except Exception as error:
         error_message = str(error)
 
-        print(
-            "Analyze report error:",
-            repr(error),
-        )
+        logger.exception("Report analysis failed")
 
         if "RESOURCE_EXHAUSTED" in error_message or "429" in error_message:
             raise HTTPException(
@@ -251,6 +354,7 @@ async def analyze_report(
     }
 
     saved_report = None
+    report_edit_token = None
 
     category = result.get("category")
 
@@ -277,7 +381,7 @@ async def analyze_report(
             "Routed" if (authority and evidence_sufficient) else "Needs review"
         )
 
-        saved_report = create_report(
+        saved_report, report_edit_token = create_report(
             {
                 "title": build_report_title(description),
                 "description": description,
@@ -317,6 +421,8 @@ async def analyze_report(
     return {
         "report_id": (saved_report["public_id"] if saved_report else None),
         "report_saved": saved_report is not None,
+        # Sent only once to the creator; never included in GET/list responses.
+        "edit_token": report_edit_token,
         "issue_status": (saved_report["issue_status"] if saved_report else None),
         "routing_status": (saved_report["routing_status"] if saved_report else None),
         "official_submission_status": (
@@ -405,6 +511,7 @@ def get_report_by_id(
 def patch_report(
     report_id: str,
     payload: ReportStatusUpdate,
+    edit_token: str | None = Header(default=None, alias="X-Report-Edit-Token"),
 ):
     existing = get_report(report_id)
 
@@ -414,9 +521,17 @@ def patch_report(
             detail=("Report not found."),
         )
 
-    updated = update_report(
-        report_id,
-        payload.model_dump(exclude_none=True),
-    )
+    if not edit_token:
+        raise HTTPException(status_code=401, detail="Report edit token is required.")
+    if not verify_report_edit_token(report_id, edit_token):
+        raise HTTPException(
+            status_code=403, detail="Not authorized to edit this report."
+        )
+
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="Provide a status to update.")
+
+    updated = update_report(report_id, updates)
 
     return updated

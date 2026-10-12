@@ -1,3 +1,7 @@
+import hashlib
+import hmac
+import secrets
+
 from datetime import (
     datetime,
     timezone,
@@ -21,6 +25,9 @@ def row_to_report(row):
         return None
 
     report = dict(row)
+
+    # Never expose this secret verifier in GET/list/PATCH responses.
+    report.pop("edit_token_hash", None)
 
     report[
         "evidence_sufficient"
@@ -64,6 +71,8 @@ def create_report(data):
     )
 
     timestamp = utc_now()
+    edit_token = secrets.token_urlsafe(32)
+    edit_token_hash = hashlib.sha256(edit_token.encode("utf-8")).hexdigest()
 
     try:
         cursor = (
@@ -71,6 +80,7 @@ def create_report(data):
                 """
                 INSERT INTO reports (
                     public_id,
+                    edit_token_hash,
 
                     title,
                     description,
@@ -104,7 +114,7 @@ def create_report(data):
                     updated_at
                 )
                 VALUES (
-                    ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?,
                     ?, ?,
                     ?, ?,
                     ?,
@@ -117,6 +127,7 @@ def create_report(data):
                 """,
                 (
                     public_id,
+                    edit_token_hash,
 
                     data["title"],
                     data[
@@ -212,9 +223,7 @@ def create_report(data):
             ).fetchone()
         )
 
-        return row_to_report(
-            row
-        )
+        return row_to_report(row), edit_token
 
     finally:
         connection.close()
@@ -416,3 +425,24 @@ def update_report(
 
     finally:
         connection.close()
+
+def verify_report_edit_token(public_id: str, edit_token: str | None) -> bool:
+    """Verify a creator-only capability token without exposing the stored hash."""
+    if not edit_token or len(edit_token) > 128:
+        return False
+
+    connection = get_connection()
+    try:
+        row = connection.execute(
+            "SELECT edit_token_hash FROM reports WHERE public_id = ?",
+            (public_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+
+    if not row or not row["edit_token_hash"]:
+        # Legacy reports have no creator token and cannot be publicly edited.
+        return False
+
+    supplied_hash = hashlib.sha256(edit_token.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(supplied_hash, row["edit_token_hash"])
