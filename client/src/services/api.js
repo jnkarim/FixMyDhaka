@@ -329,8 +329,13 @@ export async function getReport(
 
 export async function updateReportStatus(
   reportId,
-  updates
+  updates,
+  editToken
 ) {
+  if (!editToken) {
+    throw new Error("You can only change the status of a report you just created.");
+  }
+
   const response =
     await fetch(
       `${API_BASE_URL}/api/reports/${reportId}`,
@@ -341,6 +346,8 @@ export async function updateReportStatus(
         headers: {
           "Content-Type":
             "application/json",
+          "X-Report-Edit-Token":
+            editToken,
         },
 
         body:

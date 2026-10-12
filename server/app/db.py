@@ -1,15 +1,12 @@
 import sqlite3
 from pathlib import Path
 
-
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = APP_DIR / "data"
 
 DB_PATH = DATA_DIR / "fixmydhaka.db"
 
-REPORT_UPLOAD_DIR = (
-    DATA_DIR / "report_uploads"
-)
+REPORT_UPLOAD_DIR = DATA_DIR / "report_uploads"
 
 
 def get_connection():
@@ -23,13 +20,9 @@ def get_connection():
         exist_ok=True,
     )
 
-    connection = sqlite3.connect(
-        DB_PATH
-    )
+    connection = sqlite3.connect(DB_PATH)
 
-    connection.row_factory = (
-        sqlite3.Row
-    )
+    connection.row_factory = sqlite3.Row
 
     return connection
 
@@ -38,12 +31,12 @@ def init_db():
     connection = get_connection()
 
     try:
-        connection.execute(
-            """
+        connection.execute("""
             CREATE TABLE IF NOT EXISTS reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
 
                 public_id TEXT UNIQUE NOT NULL,
+                edit_token_hash TEXT,
 
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
@@ -81,32 +74,32 @@ def init_db():
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
-            """
-        )
+            """)
 
-        connection.execute(
-            """
+        # Migrate databases created before edit tokens were introduced.
+        columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(reports)")
+        }
+        if "edit_token_hash" not in columns:
+            connection.execute("ALTER TABLE reports ADD COLUMN edit_token_hash TEXT")
+
+        connection.execute("""
             CREATE INDEX IF NOT EXISTS
             idx_reports_created_at
             ON reports(created_at)
-            """
-        )
+            """)
 
-        connection.execute(
-            """
+        connection.execute("""
             CREATE INDEX IF NOT EXISTS
             idx_reports_authority
             ON reports(authority)
-            """
-        )
+            """)
 
-        connection.execute(
-            """
+        connection.execute("""
             CREATE INDEX IF NOT EXISTS
             idx_reports_category
             ON reports(category)
-            """
-        )
+            """)
 
         connection.commit()
 
